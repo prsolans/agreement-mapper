@@ -9,15 +9,11 @@ import os
 from datetime import datetime
 from pathlib import Path
 from research_agent import CompanyResearchAgent
-from storage_manager import StorageManager
 from export_manager import ExportManager
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
-
-# Initialize storage manager
-storage = StorageManager()
 
 # Page configuration
 st.set_page_config(
@@ -135,10 +131,6 @@ def init_session_state():
         st.session_state.analysis_result = None
     if 'research_status' not in st.session_state:
         st.session_state.research_status = {}
-    if 'loaded_filename' not in st.session_state:
-        st.session_state.loaded_filename = None
-    if 'edit_mode' not in st.session_state:
-        st.session_state.edit_mode = False
 
 
 def render_research_status(task_name: str, title: str, icon: str, state: str = 'not-started', message: str = ''):
@@ -694,51 +686,6 @@ def main():
 
         st.markdown("---")
 
-        # Saved Analyses
-        st.markdown('### <i class="fas fa-save" style="color: rgb(255, 75, 75);"></i> Saved Analyses', unsafe_allow_html=True)
-        saved_analyses = storage.list_analyses()
-
-        if saved_analyses:
-            st.markdown(f"*{len(saved_analyses)} saved*")
-
-            # Search box
-            search_query = st.text_input("Search", placeholder="Filter by company name", key="search_analyses")
-
-            # Filter analyses
-            if search_query:
-                filtered_analyses = [a for a in saved_analyses if search_query.lower() in a['company_name'].lower()]
-            else:
-                filtered_analyses = saved_analyses[:10]  # Show last 10
-
-            for analysis_meta in filtered_analyses:
-                with st.container():
-                    col1, col2, col3 = st.columns([3, 1, 1])
-
-                    with col1:
-                        st.markdown(f"**{analysis_meta['company_name']}**")
-                        st.caption(analysis_meta['analysis_date'])
-
-                    with col2:
-                        # Using Font Awesome unicode for folder-open icon
-                        if st.button("\uf07c", key=f"load_{analysis_meta['filename']}", use_container_width=True, help="Load analysis"):
-                            loaded = storage.load_analysis(analysis_meta['filename'])
-                            if loaded:
-                                st.session_state.analysis_result = loaded
-                                st.session_state.loaded_filename = analysis_meta['filename']
-                                st.session_state.edit_mode = False
-                                st.rerun()
-
-                    with col3:
-                        # Using Font Awesome unicode for trash icon
-                        if st.button("\uf2ed", key=f"delete_{analysis_meta['filename']}", use_container_width=True, help="Delete analysis"):
-                            if storage.delete_analysis(analysis_meta['filename']):
-                                st.success(f"Deleted {analysis_meta['company_name']}")
-                                st.rerun()
-
-                    st.markdown("---")
-        else:
-            st.info("No saved analyses yet. Analyze a company to get started!")
-
     # Main content
     if not api_key:
         st.markdown('<div class="warning-box"><i class="fas fa-exclamation-triangle"></i> Please enter your OpenAI API key in the sidebar to get started.</div>', unsafe_allow_html=True)
@@ -802,19 +749,7 @@ def main():
             result = asyncio.run(run_research(company_name, api_key, progress_containers, None))
 
             st.session_state.analysis_result = result
-            st.session_state.loaded_filename = None  # New analysis, not loaded
-            st.session_state.edit_mode = False
-
-            # Auto-save the analysis
-            try:
-                filepath = storage.save_analysis(company_name, result)
-                st.markdown(f'<div class="success-box"><i class="fas fa-check-circle" style="color: rgb(255, 75, 75);"></i> Analysis complete and saved!</div>', unsafe_allow_html=True)
-                st.caption(f"Saved to: {Path(filepath).name}")
-                # Update loaded filename for editing
-                st.session_state.loaded_filename = Path(filepath).name
-            except Exception as save_error:
-                st.warning(f"Analysis complete but save failed: {save_error}")
-                st.markdown('<div class="success-box"><i class="fas fa-check-circle" style="color: rgb(255, 75, 75);"></i> Analysis complete!</div>', unsafe_allow_html=True)
+            st.markdown('<div class="success-box"><i class="fas fa-check-circle" style="color: rgb(255, 75, 75);"></i> Analysis complete!</div>', unsafe_allow_html=True)
 
         except Exception as e:
             st.error(f"Error during analysis: {str(e)}")
@@ -828,26 +763,13 @@ def main():
 
         st.markdown("---")
 
-        # Edit Mode Controls
-        col1, col2, col3, col4 = st.columns([2.5, 1, 1, 1.5])
+        # Header with export options
+        col1, col2 = st.columns([3, 1])
 
         with col1:
             st.markdown(f"## {company_analyzed}")
 
         with col2:
-            if st.session_state.loaded_filename:
-                st.session_state.edit_mode = st.toggle("Edit Mode", value=st.session_state.edit_mode)
-
-        with col3:
-            if st.session_state.edit_mode and st.session_state.loaded_filename:
-                if st.button("Save Changes", type="primary"):
-                    if storage.update_analysis(st.session_state.loaded_filename, st.session_state.analysis_result):
-                        st.success("Changes saved!")
-                        st.rerun()
-                    else:
-                        st.error("Failed to save changes")
-
-        with col4:
             export_option = st.selectbox(
                 "Export",
                 ["Download as...", "JSON", "PNG Image", "PowerPoint", "Word Doc"],
@@ -1013,35 +935,12 @@ def main():
 
         st.markdown("---")
 
-        # Edit Mode: JSON Editor
-        if st.session_state.edit_mode:
-            st.markdown("### ✏️ Edit Analysis (JSON)")
-            st.info("Tip: Edit the JSON below. Click 'Save Changes' above when done.")
-
-            edited_json = st.text_area(
-                "Analysis JSON",
-                value=json.dumps(analysis, indent=2),
-                height=400,
-                key="json_editor"
-            )
-
-            try:
-                # Parse and update session state with edited JSON
-                edited_data = json.loads(edited_json)
-                st.session_state.analysis_result = edited_data
-                st.success("JSON is valid")
-            except json.JSONDecodeError as e:
-                st.error(f"Invalid JSON: {e}")
-
-            st.markdown("---")
-
-        # Detailed sections (view mode or alongside edit mode)
-        if not st.session_state.edit_mode or st.checkbox("Show detailed view", value=not st.session_state.edit_mode):
-            display_company_profile(analysis.get('company_profile', {}))
-            display_business_units(analysis.get('business_units', []))
-            display_agreement_landscape_by_function(analysis.get('agreement_landscape_by_function', {}))
-            display_opportunities(analysis.get('optimization_opportunities', []))
-            display_agreement_matrix(analysis.get('agreement_matrix', {}))
+        # Detailed sections
+        display_company_profile(analysis.get('company_profile', {}))
+        display_business_units(analysis.get('business_units', []))
+        display_agreement_landscape_by_function(analysis.get('agreement_landscape_by_function', {}))
+        display_opportunities(analysis.get('optimization_opportunities', []))
+        display_agreement_matrix(analysis.get('agreement_matrix', {}))
 
 
 if __name__ == "__main__":
