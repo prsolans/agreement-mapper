@@ -1,0 +1,381 @@
+{
+  "_meta": {
+    "template_version": "1.0",
+    "company_name": "Example Corp",
+    "analysis_date": "2025-10-31",
+    "last_updated": "2025-10-31",
+    "analyst": "",
+    "research_status": "in-progress",
+    "notes": "Track your research progress and observations here"
+  },
+  
+  "company_profile": {
+    "legal_name": "Example Corporation",
+    "brand_names": ["Example", "ExamplePro"],
+    "industry": "Technology / SaaS",
+    "year_founded": 2010,
+    "headquarters": "San Francisco, CA",
+    "ownership_structure": "Public / Private / Family-owned",
+    
+    "scale": {
+      "annual_revenue": "$1.5B",
+      "revenue_numeric": 1500000000,
+      "employees": 5000,
+      "locations": 50,
+      "countries": 15,
+      "customers": "10K+"
+    },
+    
+    "business_model": {
+      "primary_revenue_model": "Subscription SaaS with usage-based pricing",
+      "key_differentiators": [
+        "Vertical integration",
+        "Platform approach",
+        "AI-powered automation"
+      ],
+      "customer_segments": [
+        "Enterprise (>$100M revenue)",
+        "Mid-market ($10M-$100M)",
+        "SMB (<$10M)"
+      ]
+    },
+    
+    "strategic_initiatives": [
+      {
+        "initiative": "AI/ML product enhancement",
+        "timeline": "2025-2026",
+        "priority": "high",
+        "investment": "$50M",
+        "impact_areas": ["product", "customer_experience"]
+      },
+      {
+        "initiative": "International expansion",
+        "timeline": "2025-2027",
+        "priority": "medium",
+        "investment": "$30M",
+        "impact_areas": ["revenue", "market_share"]
+      }
+    ],
+    
+    "sources": [
+      "Company investor relations 2024 annual report",
+      "Q3 2025 earnings call",
+      "TechCrunch coverage of expansion"
+    ],
+    "confidence": "high"
+  },
+  
+  "brand": {
+    "primary_color": "#0066CC",
+    "secondary_color": "#00CCFF",
+    "accent_color": "#FF6600",
+    "text_color": "#1a1a1a",
+    "background_color": "#f8f9fa"
+  },
+  
+  "business_units": [
+    {
+      "unit_id": "bu_001",
+      "name": "Enterprise Sales",
+      "description": "Direct sales to Fortune 500 companies",
+      "revenue_contribution": "$800M",
+      "revenue_percentage": 53,
+      "agreement_volume": "5,000+",
+      "agreement_volume_numeric": 5000,
+      "complexity_level": 5,
+      "complexity_notes": "High complexity: custom terms, multi-year, heavy negotiation",
+      
+      "key_agreement_types": [
+        {
+          "type": "Master Service Agreement",
+          "volume": "500+",
+          "avg_value": "$500K",
+          "avg_term": "3 years",
+          "renewal_rate": "85%"
+        },
+        {
+          "type": "Statement of Work",
+          "volume": "2,000+",
+          "avg_value": "$100K",
+          "avg_term": "1 year",
+          "renewal_rate": "70%"
+        },
+        {
+          "type": "Data Processing Agreement",
+          "volume": "500+",
+          "avg_value": "N/A",
+          "avg_term": "Coterminous",
+          "renewal_rate": "N/A"
+        }
+      ],
+      
+      "primary_counterparties": [
+        "Enterprise customers (>$100M revenue)",
+        "Systems integrators",
+        "Technology partners"
+      ],
+      
+      "systems_used": [
+        "Salesforce for CRM",
+        "DocuSign CLM for contracts",
+        "NetSuite for billing"
+      ],
+      
+      "pain_points": [
+        "Contract cycle time: 45+ days average",
+        "Heavy redlining on data privacy terms",
+        "Manual renewal tracking"
+      ],
+      
+      "sources": ["Sales ops team interview", "Salesforce reports"],
+      "confidence": "high"
+    },
+    {
+      "unit_id": "bu_002",
+      "name": "Partner Ecosystem",
+      "description": "Channel partners, resellers, and technology integrations",
+      "revenue_contribution": "$400M",
+      "revenue_percentage": 27,
+      "agreement_volume": "15,000+",
+      "agreement_volume_numeric": 15000,
+      "complexity_level": 3,
+      "complexity_notes": "Medium complexity: templated with some customization",
+      
+      "key_agreement_types": [
+        {
+          "type": "Channel Partner Agreement",
+          "volume": "500+",
+          "avg_value": "$2M annual",
+          "avg_term": "2 years",
+          "renewal_rate": "80%"
+        },
+        {
+          "type": "Referral Agreement",
+          "volume": "2,000+",
+          "avg_value": "Commission-based",
+          "avg_term": "1 year",
+          "renewal_rate": "65%"
+        },
+        {
+          "type": "Technology Integration Agreement",
+          "volume": "200+",
+          "avg_value": "Varies",
+          "avg_term": "2 years",
+          "renewal_rate": "90%"
+        }
+      ],
+      
+      "primary_counterparties": [
+        "Value-added resellers",
+        "System integrators",
+        "ISV partners",
+        "Referral partners"
+      ],
+      
+      "systems_used": [
+        "Partner portal",
+        "Spreadsheets for tracking",
+        "Email for execution"
+      ],
+      
+      "pain_points": [
+        "Fragmented partner onboarding",
+        "Inconsistent terms across similar partners",
+        "No centralized contract repository"
+      ],
+      
+      "sources": ["Partner ops documentation", "Channel VP interview"],
+      "confidence": "medium"
+    }
+  ],
+  
+  "agreement_landscape_summary": {
+    "total_estimated_agreements": "50,000+",
+    "front_office_agreements": "35,000+",
+    "back_office_agreements": "15,000+",
+    
+    "agreement_categories": [
+      {
+        "category": "Revenue Agreements",
+        "subcategories": [
+          "Customer contracts (MSAs, SOWs)",
+          "Partner/channel agreements",
+          "Licensing agreements"
+        ],
+        "estimated_volume": "25,000+",
+        "business_criticality": "high"
+      },
+      {
+        "category": "Procurement Agreements",
+        "subcategories": [
+          "Vendor master agreements",
+          "Professional services agreements",
+          "SaaS subscriptions"
+        ],
+        "estimated_volume": "5,000+",
+        "business_criticality": "high"
+      },
+      {
+        "category": "Operational Agreements",
+        "subcategories": [
+          "Real estate leases",
+          "Insurance policies",
+          "Employment agreements"
+        ],
+        "estimated_volume": "3,000+",
+        "business_criticality": "medium"
+      },
+      {
+        "category": "Legal/Compliance Agreements",
+        "subcategories": [
+          "NDAs",
+          "Data processing agreements",
+          "Compliance certifications"
+        ],
+        "estimated_volume": "10,000+",
+        "business_criticality": "medium"
+      }
+    ],
+    
+    "renewal_patterns": {
+      "quarterly_renewals": "~5,000 agreements",
+      "annual_renewals": "~15,000 agreements",
+      "multi_year": "~8,000 agreements",
+      "evergreen": "~2,000 agreements"
+    }
+  },
+  
+  "optimization_opportunities": [
+    {
+      "opportunity_id": "opp_001",
+      "title": "Enterprise Contract Cycle Time Reduction",
+      "description": "Automate template selection, approval routing, and e-signature for standard enterprise agreements",
+      "business_units_impacted": ["bu_001"],
+      "strategic_alignment": [
+        "Improves customer experience",
+        "Accelerates revenue recognition"
+      ],
+      
+      "current_state": {
+        "process_description": "Manual template selection, email-based approvals, wet signatures",
+        "cycle_time": "45 days average",
+        "pain_points": [
+          "Legal bottleneck on reviews",
+          "Lost deals due to slow process",
+          "Version control issues"
+        ]
+      },
+      
+      "future_state": {
+        "process_description": "Guided template selection, automated routing, digital signature",
+        "target_cycle_time": "15 days average",
+        "key_capabilities": [
+          "CLM with workflow automation",
+          "Template library with playbooks",
+          "Integrated e-signature"
+        ]
+      },
+      
+      "value_quantification": {
+        "time_savings": "30 days per contract",
+        "agreements_affected": "2,000/year",
+        "revenue_acceleration": "$10M faster time-to-revenue",
+        "cost_savings": "$2M in operational efficiency",
+        "total_annual_value": "$12M",
+        "implementation_cost": "$1.5M",
+        "roi_percentage": "800%",
+        "payback_period": "2 months"
+      },
+      
+      "implementation": {
+        "priority": "high",
+        "timeline": "6-9 months",
+        "complexity": "medium",
+        "dependencies": ["Legal process redesign", "Template standardization"]
+      },
+      
+      "sources": ["Sales ops data", "Legal dept. analysis"],
+      "confidence": "high"
+    },
+    {
+      "opportunity_id": "opp_002",
+      "title": "Partner Onboarding Automation",
+      "description": "Create self-service partner onboarding portal with automated agreement execution",
+      "business_units_impacted": ["bu_002"],
+      "strategic_alignment": [
+        "Enables partner ecosystem scaling",
+        "Supports international expansion"
+      ],
+      
+      "current_state": {
+        "process_description": "Manual outreach, spreadsheet tracking, email-based contract execution",
+        "cycle_time": "30 days to onboard",
+        "pain_points": [
+          "Partner frustration with delays",
+          "Administrative overhead",
+          "Inconsistent partner data"
+        ]
+      },
+      
+      "future_state": {
+        "process_description": "Self-service portal, automated KYC, instant agreement generation",
+        "target_cycle_time": "48 hours to onboard",
+        "key_capabilities": [
+          "Partner portal with CLM integration",
+          "Automated KYC/compliance checks",
+          "Dynamic agreement generation"
+        ]
+      },
+      
+      "value_quantification": {
+        "time_savings": "28 days per partner",
+        "agreements_affected": "500/year new partners",
+        "revenue_impact": "$8M incremental channel revenue",
+        "cost_savings": "$500K in ops costs",
+        "total_annual_value": "$8.5M",
+        "implementation_cost": "$800K",
+        "roi_percentage": "1,063%",
+        "payback_period": "1 month"
+      },
+      
+      "implementation": {
+        "priority": "medium",
+        "timeline": "4-6 months",
+        "complexity": "low",
+        "dependencies": ["Partner portal enhancement", "Legal template approval"]
+      },
+      
+      "sources": ["Partner ops team", "Channel metrics"],
+      "confidence": "medium"
+    }
+  ],
+  
+  "portfolio_summary": {
+    "total_opportunities": 2,
+    "total_annual_value": "$20.5M",
+    "total_implementation_cost": "$2.3M",
+    "portfolio_roi": "891%",
+    "portfolio_payback": "2 months average",
+    "high_priority_opportunities": 1,
+    "medium_priority_opportunities": 1,
+    "low_priority_opportunities": 0
+  },
+  
+  "research_notes": {
+    "key_findings": [
+      "Company has grown through acquisition - disparate contract systems",
+      "Strong strategic focus on AI and automation creates receptive environment",
+      "Legal team is understaffed (3 attorneys for $1.5B company)"
+    ],
+    "data_gaps": [
+      "Exact agreement counts by type",
+      "Current CLM vendor and contract end date",
+      "IT architecture and integration requirements"
+    ],
+    "next_steps": [
+      "Interview with General Counsel",
+      "Review sample agreements",
+      "Validate financial assumptions with CFO"
+    ]
+  }
+}

@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Company Agreement Landscape Visualization</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .file-input-wrapper {
+            margin-bottom: 20px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-label {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+
+        .file-label:hover {
+            background: #5568d3;
+        }
+
+        .file-name {
+            margin-left: 15px;
+            color: #666;
+            font-style: italic;
+        }
+
+        h1 {
+            color: #2d3748;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .company-info {
+            color: #4a5568;
+            font-size: 1.1em;
+            margin-top: 15px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .stat-label {
+            color: #718096;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            color: #2d3748;
+            font-size: 1.8em;
+            font-weight: 700;
+            margin-top: 5px;
+        }
+
+        .visualization-card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .viz-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .viz-header h2 {
+            color: #2d3748;
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .viz-subtitle {
+            color: #718096;
+            font-size: 1.1em;
+        }
+
+        .business-units-container {
+            position: relative;
+            width: 100%;
+            height: 800px;
+            margin: 40px 0;
+        }
+
+        .central-org {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 200px;
+            background: white;
+            border: 4px solid #667eea;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+            z-index: 10;
+        }
+
+        .central-org .company-name {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #2d3748;
+            text-align: center;
+            padding: 0 20px;
+        }
+
+        .central-org .company-revenue {
+            font-size: 1.1em;
+            color: #667eea;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .business-unit {
+            position: absolute;
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 180px;
+            max-width: 220px;
+        }
+
+        .business-unit:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            z-index: 100;
+        }
+
+        .unit-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .unit-color-badge {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        .unit-name {
+            font-weight: 700;
+            color: #2d3748;
+            font-size: 1.1em;
+            line-height: 1.3;
+        }
+
+        .unit-description {
+            color: #718096;
+            font-size: 0.85em;
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+
+        .unit-metrics {
+            display: grid;
+            gap: 8px;
+        }
+
+        .unit-metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85em;
+        }
+
+        .metric-label {
+            color: #a0aec0;
+        }
+
+        .metric-value {
+            color: #2d3748;
+            font-weight: 600;
+        }
+
+        .complexity-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .complexity-1, .complexity-2 { background: #c6f6d5; color: #22543d; }
+        .complexity-3 { background: #fef3c7; color: #78350f; }
+        .complexity-4, .complexity-5 { background: #fecaca; color: #7f1d1d; }
+
+        .system-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
+        .system-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            background: #3182ce;
+            color: white;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .system-badge:nth-child(2n) {
+            background: #805ad5;
+        }
+
+        .system-badge:nth-child(3n) {
+            background: #d69e2e;
+        }
+
+        .connecting-line {
+            position: absolute;
+            background: #e2e8f0;
+            height: 2px;
+            transform-origin: left center;
+            z-index: 1;
+            opacity: 0.5;
+        }
+
+        .opportunities-section {
+            margin-top: 40px;
+        }
+
+        .opportunities-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .opportunity-card {
+            background: #f7fafc;
+            padding: 25px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .opp-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+        }
+
+        .opp-title {
+            font-size: 1.2em;
+            font-weight: 700;
+            color: #2d3748;
+            flex: 1;
+        }
+
+        .priority-badge {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .priority-high { background: #fecaca; color: #7f1d1d; }
+        .priority-medium { background: #fef3c7; color: #78350f; }
+        .priority-low { background: #dbeafe; color: #1e3a8a; }
+
+        .opp-description {
+            color: #4a5568;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+
+        .opp-value {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .value-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .value-label {
+            color: #a0aec0;
+            font-size: 0.85em;
+        }
+
+        .value-amount {
+            color: #2d3748;
+            font-weight: 700;
+            font-size: 1.2em;
+            margin-top: 4px;
+        }
+
+        .legend {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+
+        .legend-title {
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+
+        .legend-items {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+        }
+
+        .legend-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+
+        .legend-text {
+            color: #4a5568;
+            font-size: 0.9em;
+        }
+
+        .error-message {
+            background: #fecaca;
+            color: #7f1d1d;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+
+        .toggle-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.3s;
+            font-size: 0.9em;
+        }
+
+        .toggle-btn:hover {
+            background: #5568d3;
+        }
+
+        .toggle-btn:active {
+            transform: scale(0.98);
+        }
+
+        @media (max-width: 768px) {
+            .business-units-container {
+                height: 600px;
+            }
+
+            .opportunities-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .viz-header {
+                flex-direction: column !important;
+                align-items: flex-start !important;
+            }
+
+            .toggle-container {
+                margin-top: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            
+            <div id="headerContent" style="display: none;">
+                <h1 id="companyName">Company Name</h1>
+                <div class="company-info">
+                    <span id="industry">Industry</span> • 
+                    <span id="ownership">Ownership</span> • 
+                    <span id="employees">Employees</span> employees • 
+                    <span id="locations">Locations</span> locations
+                </div>
+                <div class="stats-grid" id="statsGrid"></div>
+            </div>
+        </div>
+
+        <div id="mainContent" style="display: none;">
+            <div class="visualization-card">
+                <div class="viz-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2>Agreement Landscape</h2>
+                        <div class="viz-subtitle" id="viz-subtitle">Business Function Distribution & Complexity</div>
+                    </div>
+                    <div class="toggle-container">
+                        <button class="toggle-btn" id="viewToggle" onclick="toggleView()">
+                            <span id="toggleLabel">View: Functions</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="business-units-container" id="businessUnitsContainer">
+                    <!-- Central org circle -->
+                    <div class="central-org">
+                        <div class="company-name" id="centralCompanyName">Company</div>
+                        <div class="company-revenue" id="centralRevenue">$0</div>
+                    </div>
+                    <!-- Business units will be positioned around the center -->
+                </div>
+
+                <div class="legend">
+                    <div class="legend-title">Legend</div>
+                    <div class="legend-items">
+                        <div class="legend-item">
+                            <div class="legend-icon" style="background: #48bb78;"></div>
+                            <div class="legend-text">Low Complexity (1-2)</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-icon" style="background: #f6ad55;"></div>
+                            <div class="legend-text">Medium Complexity (3)</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-icon" style="background: #f56565;"></div>
+                            <div class="legend-text">High Complexity (4-5)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="visualization-card opportunities-section">
+                <div class="viz-header">
+                    <h2>Optimization Opportunities</h2>
+                    <div class="viz-subtitle">Strategic initiatives aligned with business goals</div>
+                </div>
+                <div class="opportunities-grid" id="opportunitiesGrid"></div>
+            </div>
+        </div>
+
+        <div id="errorContainer"></div>
+    </div>
+
+    <script>
+        let companyData = null;
+        let currentView = 'functions'; // 'functions' or 'units'
+
+        // Helper function to parse agreement volumes like "5,000+" to numeric
+        function parseAgreementVolume(volumeStr) {
+            if (!volumeStr || volumeStr === 'N/A') return 0;
+
+            // Remove commas, +, and other non-numeric characters except numbers
+            const cleaned = String(volumeStr).replace(/[,+]/g, '');
+            const match = cleaned.match(/(\d+)/);
+            return match ? parseInt(match[1]) : 0;
+        }
+
+        // File input handling
+        document.getElementById('jsonFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('fileName').textContent = file.name;
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        companyData = JSON.parse(e.target.result);
+                        renderVisualization(companyData);
+                    } catch (error) {
+                        showError('Invalid JSON file: ' + error.message);
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        function showError(message) {
+            document.getElementById('errorContainer').innerHTML = `
+                <div class="error-message">
+                    <strong>Error:</strong> ${message}
+                </div>
+            `;
+        }
+
+        function renderVisualization(data) {
+            try {
+                // Show main content
+                document.getElementById('headerContent').style.display = 'block';
+                document.getElementById('mainContent').style.display = 'block';
+                document.getElementById('errorContainer').innerHTML = '';
+
+                // Apply brand colors
+                if (data.brand && data.brand.primary_color) {
+                    document.documentElement.style.setProperty('--primary-color', data.brand.primary_color);
+                    document.querySelectorAll('.stat-card').forEach(card => {
+                        card.style.borderLeftColor = data.brand.primary_color;
+                    });
+                }
+
+                // Render header
+                renderHeader(data);
+
+                // Determine which view to use based on data availability
+                // Default to functions view if available, otherwise fall back to units
+                if (data.agreement_landscape_by_function && data.agreement_landscape_by_function.functions) {
+                    currentView = 'functions';
+                    renderBusinessFunctions(data);
+                } else if (data.business_units) {
+                    currentView = 'units';
+                    renderBusinessUnits(data);
+                }
+
+                // Render opportunities
+                renderOpportunities(data);
+
+            } catch (error) {
+                showError('Error rendering visualization: ' + error.message);
+            }
+        }
+
+        function renderHeader(data) {
+            const profile = data.company_profile;
+            
+            document.getElementById('companyName').textContent = profile.legal_name || data._meta.company_name;
+            document.getElementById('industry').textContent = profile.industry || 'N/A';
+            document.getElementById('ownership').textContent = profile.ownership_structure || 'N/A';
+            document.getElementById('employees').textContent = profile.scale.employees?.toLocaleString() || 'N/A';
+            document.getElementById('locations').textContent = profile.scale.locations?.toLocaleString() || 'N/A';
+
+            // Render stats
+            const statsGrid = document.getElementById('statsGrid');
+            const stats = [
+                { label: 'Annual Revenue', value: profile.scale.annual_revenue },
+                { label: 'Countries', value: profile.scale.countries },
+                { label: 'Total Agreements', value: data.agreement_landscape_summary?.total_estimated_agreements || 'N/A' },
+                { label: 'Business Units', value: data.business_units?.length || 0 }
+            ];
+
+            statsGrid.innerHTML = stats.map(stat => `
+                <div class="stat-card">
+                    <div class="stat-label">${stat.label}</div>
+                    <div class="stat-value">${stat.value}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderBusinessUnits(data) {
+            const container = document.getElementById('businessUnitsContainer');
+            const profile = data.company_profile;
+
+            // Update central circle
+            document.getElementById('centralCompanyName').textContent = profile.legal_name || data._meta.company_name;
+            document.getElementById('centralRevenue').textContent = profile.scale.annual_revenue || 'N/A';
+
+            // Clear existing units (except central org)
+            const existingUnits = container.querySelectorAll('.business-unit, .connecting-line');
+            existingUnits.forEach(unit => unit.remove());
+
+            if (!data.business_units || data.business_units.length === 0) {
+                return;
+            }
+
+            // Sort by agreement volume and limit to 8
+            let units = data.business_units.map(unit => ({
+                ...unit,
+                parsedVolume: parseAgreementVolume(unit.agreement_volume)
+            }));
+            units.sort((a, b) => b.parsedVolume - a.parsedVolume);
+            units = units.slice(0, 8);
+            const centerX = container.offsetWidth / 2;
+            const centerY = container.offsetHeight / 2;
+            const radius = Math.min(centerX, centerY) * 0.7;
+            const angleStep = (2 * Math.PI) / units.length;
+
+            units.forEach((unit, index) => {
+                const angle = angleStep * index - Math.PI / 2; // Start from top
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+
+                // Create connecting line
+                const line = document.createElement('div');
+                line.className = 'connecting-line';
+                const lineLength = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)) - 100;
+                const lineAngle = Math.atan2(y - centerY, x - centerX) * 180 / Math.PI;
+                line.style.left = centerX + 'px';
+                line.style.top = centerY + 'px';
+                line.style.width = lineLength + 'px';
+                line.style.transform = `rotate(${lineAngle}deg)`;
+                container.appendChild(line);
+
+                // Create business unit card
+                const unitDiv = document.createElement('div');
+                unitDiv.className = 'business-unit';
+                unitDiv.style.left = (x - 110) + 'px'; // Center the card (220px wide / 2)
+                unitDiv.style.top = (y - 80) + 'px'; // Approximate center
+
+                // Get color based on complexity
+                const complexityColor = getComplexityColor(unit.complexity_level, data.brand);
+
+                unitDiv.innerHTML = `
+                    <div class="unit-header">
+                        <div class="unit-color-badge" style="background: ${complexityColor};"></div>
+                        <div class="unit-name">${unit.name}</div>
+                    </div>
+                    <div class="unit-description">${unit.description || ''}</div>
+                    <div class="unit-metrics">
+                        <div class="unit-metric">
+                            <span class="metric-label"><i class="fas fa-dollar-sign"></i> Revenue</span>
+                            <span class="metric-value">${unit.revenue_contribution || 'N/A'}</span>
+                        </div>
+                        <div class="unit-metric">
+                            <span class="metric-label"><i class="fas fa-file-contract"></i> Agreements</span>
+                            <span class="metric-value">${unit.agreement_volume || 'N/A'}</span>
+                        </div>
+                        <div class="unit-metric">
+                            <span class="metric-label"><i class="fas fa-layer-group"></i> Complexity</span>
+                            <span class="metric-value">${unit.complexity_level || 'N/A'}/5</span>
+                        </div>
+                    </div>
+                    <div class="complexity-badge complexity-${unit.complexity_level}">
+                        ${getComplexityLabel(unit.complexity_level)}
+                    </div>
+                `;
+
+                container.appendChild(unitDiv);
+            });
+        }
+
+        function renderOpportunities(data) {
+            const grid = document.getElementById('opportunitiesGrid');
+            
+            if (!data.optimization_opportunities || data.optimization_opportunities.length === 0) {
+                grid.innerHTML = '<p style="color: #718096;">No optimization opportunities defined.</p>';
+                return;
+            }
+
+            grid.innerHTML = data.optimization_opportunities.map(opp => `
+                <div class="opportunity-card">
+                    <div class="opp-header">
+                        <div class="opp-title">${opp.title}</div>
+                        <div class="priority-badge priority-${opp.implementation?.priority || 'medium'}">
+                            ${(opp.implementation?.priority || 'medium').toUpperCase()}
+                        </div>
+                    </div>
+                    <div class="opp-description">${opp.description}</div>
+                    ${opp.value_quantification ? `
+                        <div class="opp-value">
+                            <div class="value-item">
+                                <div class="value-label">Annual Value</div>
+                                <div class="value-amount">${opp.value_quantification.total_annual_value || 'N/A'}</div>
+                            </div>
+                            <div class="value-item">
+                                <div class="value-label">ROI</div>
+                                <div class="value-amount">${opp.value_quantification.roi_percentage || 'N/A'}%</div>
+                            </div>
+                            <div class="value-item">
+                                <div class="value-label">Timeline</div>
+                                <div class="value-amount">${opp.implementation?.timeline || 'N/A'}</div>
+                            </div>
+                            <div class="value-item">
+                                <div class="value-label">Payback</div>
+                                <div class="value-amount">${opp.value_quantification.payback_period || 'N/A'}</div>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        function getComplexityColor(level, brand) {
+            if (level <= 2) return brand?.secondary_color || '#48bb78'; // Green
+            if (level === 3) return brand?.accent_color || '#f6ad55'; // Orange
+            return '#f56565'; // Red
+        }
+
+        function getComplexityLabel(level) {
+            if (level <= 2) return 'Low Complexity';
+            if (level === 3) return 'Medium Complexity';
+            return 'High Complexity';
+        }
+
+        function renderBusinessFunctions(data) {
+            const container = document.getElementById('businessUnitsContainer');
+            const profile = data.company_profile;
+
+            // Update central circle
+            document.getElementById('centralCompanyName').textContent = profile.legal_name || data._meta.company_name;
+            document.getElementById('centralRevenue').textContent = profile.scale.annual_revenue || 'N/A';
+
+            // Clear existing items
+            const existingItems = container.querySelectorAll('.business-unit, .connecting-line');
+            existingItems.forEach(item => item.remove());
+
+            const landscape = data.agreement_landscape_by_function;
+            if (!landscape || !landscape.functions || landscape.functions.length === 0) {
+                return;
+            }
+
+            // Get functions, parse volumes, sort by agreement volume, and limit to 8
+            let functions = landscape.functions.map(func => ({
+                ...func,
+                parsedVolume: parseAgreementVolume(func.total_agreements)
+            }));
+
+            functions.sort((a, b) => b.parsedVolume - a.parsedVolume);
+            functions = functions.slice(0, 8);
+
+            // Calculate positions in a circle
+            const centerX = container.offsetWidth / 2;
+            const centerY = container.offsetHeight / 2;
+            const radius = Math.min(centerX, centerY) * 0.7;
+            const angleStep = (2 * Math.PI) / functions.length;
+
+            functions.forEach((func, index) => {
+                const angle = angleStep * index - Math.PI / 2;
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+
+                // Create connecting line
+                const line = document.createElement('div');
+                line.className = 'connecting-line';
+                const lineLength = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)) - 100;
+                const lineAngle = Math.atan2(y - centerY, x - centerX) * 180 / Math.PI;
+                line.style.left = centerX + 'px';
+                line.style.top = centerY + 'px';
+                line.style.width = lineLength + 'px';
+                line.style.transform = `rotate(${lineAngle}deg)`;
+                container.appendChild(line);
+
+                // Create function card
+                const funcDiv = document.createElement('div');
+                funcDiv.className = 'business-unit';
+                funcDiv.style.left = (x - 110) + 'px';
+                funcDiv.style.top = (y - 80) + 'px';
+
+                const complexityColor = getComplexityColor(func.complexity, data.brand);
+                const systems = func.systems_used || [];
+
+                // Create system badges HTML
+                const systemBadgesHTML = systems.length > 0
+                    ? `<div class="system-badges">${systems.map(sys => `<span class="system-badge">${sys}</span>`).join('')}</div>`
+                    : '';
+
+                funcDiv.innerHTML = `
+                    <div class="unit-header">
+                        <div class="unit-color-badge" style="background: ${complexityColor};"></div>
+                        <div class="unit-name">${func.function_name}</div>
+                    </div>
+                    ${systemBadgesHTML}
+                    <div class="unit-metrics">
+                        <div class="unit-metric">
+                            <span class="metric-label"><i class="fas fa-file-contract"></i> Agreements</span>
+                            <span class="metric-value">${func.total_agreements || 'N/A'}</span>
+                        </div>
+                        <div class="unit-metric">
+                            <span class="metric-label"><i class="fas fa-layer-group"></i> Complexity</span>
+                            <span class="metric-value">${func.complexity || 'N/A'}/5</span>
+                        </div>
+                    </div>
+                    <div class="complexity-badge complexity-${func.complexity}">
+                        ${getComplexityLabel(func.complexity)}
+                    </div>
+                `;
+
+                container.appendChild(funcDiv);
+            });
+        }
+
+        function toggleView() {
+            if (!companyData) return;
+
+            currentView = currentView === 'functions' ? 'units' : 'functions';
+
+            // Update toggle button label
+            document.getElementById('toggleLabel').textContent =
+                currentView === 'functions' ? 'View: Functions' : 'View: Business Units';
+
+            // Update subtitle
+            document.getElementById('viz-subtitle').textContent =
+                currentView === 'functions' ?
+                'Business Function Distribution & Complexity' :
+                'Business Unit Distribution & Complexity';
+
+            // Render appropriate view
+            if (currentView === 'functions') {
+                renderBusinessFunctions(companyData);
+            } else {
+                renderBusinessUnits(companyData);
+            }
+        }
+
+        // Initial message
+        if (!companyData) {
+            document.getElementById('headerContent').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
