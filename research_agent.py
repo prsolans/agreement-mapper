@@ -593,16 +593,27 @@ For each opportunity, provide in JSON format:
 - confidence: high/medium/low
 
 Focus on opportunities that address the pain points identified in the business functions above.
-Return array of opportunities as valid JSON.
+
+IMPORTANT: You MUST return EXACTLY 3 opportunities in your response.
+
+Return as valid JSON with this exact structure:
+{{
+  "opportunities": [
+    {{ /* opportunity 1 with all fields above */ }},
+    {{ /* opportunity 2 with all fields above */ }},
+    {{ /* opportunity 3 with all fields above */ }}
+  ]
+}}
 """
 
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {"role": "system", "content": "You are a business process consultant specializing in contract lifecycle optimization. Provide realistic value estimates based on industry benchmarks."},
+                {"role": "system", "content": "You are a business process consultant specializing in contract lifecycle optimization. Provide realistic value estimates based on industry benchmarks. Always return EXACTLY 3 opportunities."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.5,
+            max_tokens=4096,
             response_format={"type": "json_object"}
         )
 
