@@ -811,36 +811,33 @@ def main():
         }
         </style>
         """, unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            word_button = st.button("Export Slide Content as Word Doc", type="secondary")
 
-        if word_button:
-            with st.spinner("Creating Word document..."):
-                try:
-                    # Create Word document with slide content
-                    export_manager = ExportManager()
-                    docx_bytes = export_manager.create_docx_content(
-                        company_analyzed,
-                        analysis
-                    )
+        # Full-width Word export button
+        with st.spinner("Creating Word document..."):
+            try:
+                # Create Word document with slide content
+                export_manager = ExportManager()
+                docx_bytes = export_manager.create_docx_content(
+                    company_analyzed,
+                    analysis
+                )
 
-                    # Provide download button
-                    filename = f"{company_analyzed.replace(' ', '_').lower()}_slide_content.docx"
+                # Provide download button
+                filename = f"{company_analyzed.replace(' ', '_').lower()}_slide_content.docx"
 
-                    st.download_button(
-                        label="Download Word Doc",
-                        data=docx_bytes,
-                        file_name=filename,
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        use_container_width=True
-                    )
+                st.download_button(
+                    label="Download Word Doc",
+                    data=docx_bytes,
+                    file_name=filename,
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True
+                )
 
-                    st.success("Word document created successfully!")
+                st.success("Word document created successfully!")
 
-                except Exception as e:
-                    st.error(f"Export failed: {str(e)}")
-                    st.exception(e)
+            except Exception as e:
+                st.error(f"Export failed: {str(e)}")
+                st.exception(e)
 
         # Summary metrics
         display_analysis_summary(analysis)
