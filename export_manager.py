@@ -664,6 +664,34 @@ class ExportManager:
                 p.font.size = Pt(9)
                 p.font.color.rgb = RGBColor(0, 0, 0)
 
+        # Add executive quotes to slide notes
+        strategic_priorities = analysis.get('strategic_priorities', [])
+        if strategic_priorities:
+            notes_content = ["EXECUTIVE QUOTES - Strategic Priorities\n" + "="*50 + "\n"]
+
+            for priority in strategic_priorities:
+                priority_name = priority.get('priority_name', '')
+                executive_quotes = priority.get('executive_quotes', [])
+
+                if executive_quotes:
+                    notes_content.append(f"\n{priority_name}:")
+                    for quote in executive_quotes:
+                        exec_name = quote.get('executive', 'Unknown')
+                        quote_text = quote.get('quote', '')
+                        source = quote.get('source', '')
+                        date = quote.get('date', '')
+                        url = quote.get('url', '')
+
+                        notes_content.append(f"\n  • \"{quote_text}\"")
+                        notes_content.append(f"    - {exec_name}")
+                        notes_content.append(f"    - {source}, {date}")
+                        notes_content.append(f"    - {url}")
+
+            if len(notes_content) > 1:  # If we have more than just the header
+                notes_slide = slide3.notes_slide
+                text_frame = notes_slide.notes_text_frame
+                text_frame.text = "\n".join(notes_content)
+
         # ===== SLIDE 4: TOP 3 IDENTIFIED USE CASES =====
         slide4 = prs.slides.add_slide(blank_slide)
 
@@ -845,6 +873,36 @@ class ExportManager:
                     p.font.size = Pt(7)
                     p.font.color.rgb = RGBColor(0, 0, 0)
                     p.alignment = PP_ALIGN.CENTER
+
+        # Add executive alignment to slide notes
+        opportunities = analysis.get('optimization_opportunities', [])
+        if opportunities:
+            notes_content = ["EXECUTIVE ALIGNMENT - Optimization Opportunities\n" + "="*50 + "\n"]
+
+            for opp in opportunities[:3]:  # Top 3 opportunities
+                opp_title = opp.get('title', 'Opportunity')
+                exec_alignment = opp.get('executive_alignment', {})
+
+                if exec_alignment:
+                    priority_name = exec_alignment.get('priority_name', '')
+                    exec_champion = exec_alignment.get('executive_champion', '')
+                    alignment_statement = exec_alignment.get('alignment_statement', '')
+                    supporting_quote = exec_alignment.get('supporting_quote', '')
+
+                    notes_content.append(f"\n{opp_title}:")
+                    if priority_name:
+                        notes_content.append(f"  Supports Priority: {priority_name}")
+                    if exec_champion:
+                        notes_content.append(f"  Executive Champion: {exec_champion}")
+                    if alignment_statement:
+                        notes_content.append(f"  Alignment: {alignment_statement}")
+                    if supporting_quote:
+                        notes_content.append(f"  Supporting Quote: \"{supporting_quote}\"")
+
+            if len(notes_content) > 1:  # If we have more than just the header
+                notes_slide = slide4.notes_slide
+                text_frame = notes_slide.notes_text_frame
+                text_frame.text = "\n".join(notes_content)
 
         # ===== SLIDE 5: AGREEMENT LANDSCAPE MATRIX =====
         slide5 = prs.slides.add_slide(blank_slide)
@@ -1181,6 +1239,32 @@ class ExportManager:
                         p.add_run('Executive Responsibility: ').bold = True
                         p.add_run(executive_responsibility)
 
+                    # Executive Quotes
+                    executive_quotes = priority_data.get('executive_quotes', [])
+                    if executive_quotes:
+                        p = doc.add_paragraph()
+                        p.add_run('Executive Quotes:').bold = True
+
+                        for quote in executive_quotes:
+                            exec_name = quote.get('executive', 'Unknown')
+                            quote_text = quote.get('quote', '')
+                            source = quote.get('source', '')
+                            date = quote.get('date', '')
+                            url = quote.get('url', '')
+
+                            # Quote text
+                            p = doc.add_paragraph(style='List Bullet')
+                            p.add_run(f'"{quote_text}"').italic = True
+
+                            # Attribution
+                            p = doc.add_paragraph(style='List Bullet 2')
+                            p.add_run(f'— {exec_name}, {source}, {date}')
+
+                            # URL
+                            if url:
+                                p = doc.add_paragraph(style='List Bullet 2')
+                                p.add_run(f'Source: {url}')
+
                     # Business Impact
                     business_impact = priority_data.get('business_impact', 'N/A')
                     if business_impact and business_impact != 'N/A':
@@ -1266,6 +1350,36 @@ class ExportManager:
                         col = metric_idx % 2
                         cell = table.cell(row, col)
                         cell.text = f"{metric.get('value', 'N/A')}\n{metric.get('label', '')}"
+
+                # Executive Alignment
+                exec_alignment = opp.get('executive_alignment', {})
+                if exec_alignment:
+                    doc.add_paragraph('Executive Alignment:', style='Heading 3')
+
+                    priority_name = exec_alignment.get('priority_name', '')
+                    exec_champion = exec_alignment.get('executive_champion', '')
+                    alignment_statement = exec_alignment.get('alignment_statement', '')
+                    supporting_quote = exec_alignment.get('supporting_quote', '')
+
+                    if priority_name:
+                        p = doc.add_paragraph()
+                        p.add_run('Supports Priority: ').bold = True
+                        p.add_run(priority_name)
+
+                    if exec_champion:
+                        p = doc.add_paragraph()
+                        p.add_run('Executive Champion: ').bold = True
+                        p.add_run(exec_champion)
+
+                    if alignment_statement:
+                        p = doc.add_paragraph()
+                        p.add_run('Alignment: ').bold = True
+                        p.add_run(alignment_statement)
+
+                    if supporting_quote:
+                        p = doc.add_paragraph(style='List Bullet')
+                        p.add_run(f'Supporting Quote: ').bold = True
+                        p.add_run(f'"{supporting_quote}"').italic = True
 
                 doc.add_paragraph()
 

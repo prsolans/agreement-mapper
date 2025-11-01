@@ -176,19 +176,49 @@ If specific colors cannot be determined with confidence, use industry-appropriat
         company_name: str,
         progress_callback: Optional[Callable] = None
     ) -> List[Dict]:
-        """Research company's top strategic priorities using Tavily web search"""
+        """Research company's top strategic priorities using multi-stage Tavily web search with executive insights"""
 
+        # Stage 1: Executive interviews and statements
         if progress_callback:
-            progress_callback("Strategic Priorities - Searching web...")
+            progress_callback("Strategic Priorities - Searching executive interviews...")
 
-        # Search for strategic priorities and initiatives
-        search_results = self._search_web(
-            f"{company_name} strategic priorities 2024 2025 earnings call investor presentation CEO initiatives",
-            max_results=5
+        exec_search_results = self._search_web(
+            f"{company_name} CEO CFO interview 2024 2025 strategy vision keynote",
+            max_results=7
         )
 
+        # Stage 2: Earnings call transcripts
         if progress_callback:
-            progress_callback("Strategic Priorities - Analyzing results...")
+            progress_callback("Strategic Priorities - Searching earnings transcripts...")
+
+        earnings_search_results = self._search_web(
+            f"{company_name} earnings call transcript Q3 Q4 2024 strategic priorities initiatives",
+            max_results=7
+        )
+
+        # Stage 3: Historical for evolution tracking (12 months back)
+        if progress_callback:
+            progress_callback("Strategic Priorities - Analyzing evolution...")
+
+        historical_search_results = self._search_web(
+            f"{company_name} strategic initiatives announcements expansion 2023 2024",
+            max_results=6
+        )
+
+        # Combine all search results
+        search_results = f"""
+=== EXECUTIVE INTERVIEWS & STATEMENTS (2024-2025) ===
+{exec_search_results}
+
+=== EARNINGS CALL TRANSCRIPTS (Q3/Q4 2024) ===
+{earnings_search_results}
+
+=== HISTORICAL CONTEXT (2023-2024) ===
+{historical_search_results}
+"""
+
+        if progress_callback:
+            progress_callback("Strategic Priorities - Synthesizing insights...")
 
         prompt = f"""Based on the following web search results about {company_name}, identify their top 3 strategic business priorities.
 
@@ -201,6 +231,13 @@ Using the above search results, analyze the company's:
 - Industry trends and competitive positioning
 - Business model and growth areas
 - Executive leadership focus areas
+- How priorities have evolved over the past 12 months
+
+CRITICAL INSTRUCTIONS FOR EXECUTIVE QUOTES:
+- Extract direct quotes from named executives (CEO, CFO, COO, etc.)
+- ONLY include quotes where you can identify a verifiable source URL from the search results above
+- Each quote MUST include: exact quote text, executive name/title, source name, date, and source URL
+- If you cannot verify the source URL from the search results, DO NOT include the quote
 
 For each priority, provide in JSON format:
 - priority_id: Unique identifier (e.g., "priority_001")
@@ -209,9 +246,19 @@ For each priority, provide in JSON format:
 - business_impact: Why this priority matters to the business
 - related_initiatives: Array of related strategic initiatives or programs
 - urgency: high/medium/low
-- executive_owner: Name and title of the executive who owns this priority (e.g., "Sarah Chen, Chief Revenue Officer" or "John Smith, SVP of Operations"). Research actual executives at {company_name} if possible, or provide reasonable role-based placeholders.
+- executive_owner: Name and title of the executive who owns this priority (from search results if available)
 - executive_responsibility: Brief description of why this executive owns this priority (10-15 words)
-- sources: Array of 2-3 specific sources (e.g., "Q3 2024 Earnings Call", "2024 Annual Report", "CEO Interview - TechCrunch Dec 2024", "Investor Presentation Q4 2024")
+- executive_quotes: Array of direct quotes (ONLY with verified URLs from search results):
+  - executive: "Name, Title" (e.g., "Jane Smith, CEO")
+  - quote: Exact quote text from the source
+  - source: Name of source document/interview
+  - date: Date of statement (e.g., "Oct 2024", "Q3 2024")
+  - url: Full source URL from search results above
+- evolution: How this priority has changed over past 12 months:
+  - current_focus: What the priority focuses on now (2024-2025)
+  - previous_focus: What it was 12 months ago, if different (2023)
+  - change_indicator: "New priority" / "Increased emphasis" / "Shifted focus" / "Consistent focus"
+- sources: Array of 2-3 specific sources
 
 Focus on priorities that would benefit from intelligent agreement management and automation.
 
@@ -411,22 +458,24 @@ Return as valid JSON with structure:
                     'pain_points': func.get('pain_points', [])
                 })
 
-        # Extract priorities for context
+        # Extract priorities with executive quotes for context
         priorities_summary = []
         for priority in strategic_priorities:
-            priorities_summary.append({
+            priority_summary = {
                 'name': priority.get('priority_name'),
                 'description': priority.get('priority_description'),
                 'executive_owner': priority.get('executive_owner'),
-                'urgency': priority.get('urgency')
-            })
+                'urgency': priority.get('urgency'),
+                'executive_quotes': priority.get('executive_quotes', [])
+            }
+            priorities_summary.append(priority_summary)
 
         context = f"""
 Company: {company_name}
 Revenue: {company_profile.get('scale', {}).get('annual_revenue', 'Unknown')}
 Industry: {company_profile.get('industry', 'Unknown')}
 
-Strategic Priorities:
+Strategic Priorities (with Executive Quotes):
 {json.dumps(priorities_summary, indent=2)}
 
 Business Functions & Pain Points:
@@ -438,7 +487,10 @@ Business Functions & Pain Points:
 
 Identify EXACTLY 3 high-value contract/agreement optimization opportunities.
 
-CRITICAL: Each opportunity MUST directly support one of the Strategic Priorities listed above. The opportunities should help the company achieve those specific priorities.
+CRITICAL REQUIREMENTS:
+1. Each opportunity MUST directly support one of the Strategic Priorities listed above
+2. Each opportunity MUST reference specific executive quotes from the priorities (if available)
+3. Map each opportunity to the executive who would champion it
 
 Each opportunity should be tied to specific business functions, systems, and agreement types.
 
@@ -453,6 +505,11 @@ For each opportunity, provide in JSON format:
 - systems_impacted: Array of systems that need changes (e.g., ["Salesforce", "DocuSign"])
 - business_units_impacted: Array of business unit IDs that benefit
 - strategic_alignment: Array of 2 strategic benefits
+- executive_alignment: How this opportunity maps to executive statements:
+  - priority_name: Which strategic priority this supports
+  - executive_champion: Name and title of executive who would champion this (from priorities)
+  - alignment_statement: 2-3 sentence explanation of how this addresses the executive's stated priority
+  - supporting_quote: Direct executive quote from priorities that this opportunity addresses (if available)
 - current_state:
   - process_description: Current process (2-3 sentences)
   - cycle_time: Current timeframe
