@@ -6,6 +6,7 @@ import json
 import os
 from datetime import datetime
 from typing import Dict, List, Optional, Callable
+from pathlib import Path
 from openai import AsyncOpenAI
 from tavily import TavilyClient
 
@@ -17,6 +18,29 @@ class CompanyResearchAgent:
         self.client = AsyncOpenAI(api_key=api_key)
         self.model = "gpt-4-turbo-preview"
         self.tavily = TavilyClient(api_key=tavily_api_key) if tavily_api_key else None
+        self.product_catalog = self._load_product_catalog()
+
+    def _load_product_catalog(self) -> Optional[Dict]:
+        """
+        Load DocuSign product catalog for context injection
+
+        Returns:
+            Product catalog dict or None if not available
+        """
+        try:
+            catalog_path = Path(__file__).parent / "data" / "docusign_products.json"
+
+            if not catalog_path.exists():
+                return None
+
+            with open(catalog_path, 'r') as f:
+                catalog = json.load(f)
+
+            return catalog
+
+        except Exception as e:
+            # Silently fail - catalog is optional
+            return None
 
     def _search_web(self, query: str, max_results: int = 5) -> str:
         """
@@ -470,6 +494,25 @@ Return as valid JSON with structure:
             }
             priorities_summary.append(priority_summary)
 
+        # Build product catalog context if available
+        product_context = ""
+        if self.product_catalog:
+            products = self.product_catalog.get('products', [])
+            product_summaries = []
+            for product in products[:15]:  # Limit to top 15 to keep prompt manageable
+                product_summaries.append({
+                    'name': product.get('name'),
+                    'category': product.get('category'),
+                    'value_statement': product.get('value_statement'),
+                    'key_capabilities': product.get('key_capabilities', [])[:3]
+                })
+
+            product_context = f"""
+
+DocuSign Product Catalog (for recommendation context):
+{json.dumps(product_summaries, indent=2)}
+"""
+
         context = f"""
 Company: {company_name}
 Revenue: {company_profile.get('scale', {}).get('annual_revenue', 'Unknown')}
@@ -480,12 +523,15 @@ Strategic Priorities (with Executive Quotes):
 
 Business Functions & Pain Points:
 {json.dumps(functions_summary, indent=2)}
+{product_context}
 """
 
         prompt = f"""Based on this company context:
 {context}
 
 Identify EXACTLY 3 high-value contract/agreement optimization opportunities.
+
+{"PRODUCT CONTEXT: Use the DocuSign Product Catalog above to recommend specific products that address each opportunity." if self.product_catalog else ""}
 
 CRITICAL REQUIREMENTS:
 1. Each opportunity MUST directly support one of the Strategic Priorities listed above
@@ -538,6 +584,11 @@ For each opportunity, provide in JSON format:
   - timeline: Implementation duration
   - complexity: high/medium/low
   - dependencies: Array of prerequisites
+{f'''- recommended_docusign_products: Array of 1-3 DocuSign products that address this opportunity:
+  - product_name: Name from catalog
+  - category: Category from catalog
+  - why_recommended: 1-2 sentence explanation of fit
+  - key_capabilities_used: Array of 2-3 capabilities from the product that apply''' if self.product_catalog else ''}
 - sources: Data sources
 - confidence: high/medium/low
 
