@@ -179,10 +179,10 @@ def create_progress_callback(task_name: str, placeholder, title: str, icon: str)
     return callback
 
 
-async def run_research(company_name: str, api_key: str, progress_containers: dict, status_obj):
+async def run_research(company_name: str, api_key: str, tavily_key: str, progress_containers: dict, status_obj):
     """Execute the research asynchronously with progress tracking"""
 
-    agent = CompanyResearchAgent(api_key=api_key)
+    agent = CompanyResearchAgent(api_key=api_key, tavily_api_key=tavily_key)
 
     # Define research categories with metadata
     research_categories = {
@@ -651,23 +651,44 @@ def main():
     with st.sidebar:
         st.markdown('### <i class="fas fa-cog" style="color: rgb(255, 75, 75);"></i> Configuration', unsafe_allow_html=True)
 
-        # Check if API key is already in environment
-        env_api_key = os.environ.get('OPENAI_API_KEY')
+        # Check if API keys are already in environment
+        env_openai_key = os.environ.get('OPENAI_API_KEY')
+        env_tavily_key = os.environ.get('TAVILY_API_KEY')
 
-        if env_api_key:
-            st.success("API Key loaded from .env file")
-            api_key = env_api_key
+        # OpenAI API Key
+        if env_openai_key:
+            st.success("OpenAI API Key loaded from .env file")
+            api_key = env_openai_key
         else:
-            # API Key input
             api_key = st.text_input(
                 "OpenAI API Key",
                 type="password",
                 help="Enter your OpenAI API key. Get one at https://platform.openai.com/api-keys"
             )
-
-            # Store in environment if provided
             if api_key:
                 os.environ['OPENAI_API_KEY'] = api_key
+
+        # Tavily API Key
+        if env_tavily_key:
+            st.success("Tavily API Key loaded from .env file")
+            tavily_key = env_tavily_key
+        else:
+            tavily_key = st.text_input(
+                "Tavily API Key (Optional)",
+                type="password",
+                help="Enter your Tavily API key for web search. Get one at https://tavily.com"
+            )
+            if tavily_key:
+                os.environ['TAVILY_API_KEY'] = tavily_key
+
+        # Handle case where tavily_key might not be set
+        if 'tavily_key' not in locals():
+            tavily_key = None
+
+        if tavily_key:
+            st.info("Web search enabled via Tavily")
+        else:
+            st.warning("No Tavily key - using GPT knowledge only")
 
         st.markdown("---")
 
@@ -682,6 +703,7 @@ def main():
         - Agreement landscape mapping
         - Optimization opportunities
         - Interactive visualization
+        - Web search via Tavily (optional)
         """)
 
         st.markdown("---")
@@ -690,6 +712,10 @@ def main():
     if not api_key:
         st.markdown('<div class="warning-box"><i class="fas fa-exclamation-triangle"></i> Please enter your OpenAI API key in the sidebar to get started.</div>', unsafe_allow_html=True)
         return
+
+    # Ensure tavily_key is defined (may be None)
+    if 'tavily_key' not in locals():
+        tavily_key = None
 
     # Company input
     col1, col2 = st.columns([3, 1])
@@ -746,7 +772,7 @@ def main():
         # Run research with progress tracking
         try:
             # Run async research (no status accordion)
-            result = asyncio.run(run_research(company_name, api_key, progress_containers, None))
+            result = asyncio.run(run_research(company_name, api_key, tavily_key, progress_containers, None))
 
             st.session_state.analysis_result = result
             st.markdown('<div class="success-box"><i class="fas fa-check-circle" style="color: rgb(255, 75, 75);"></i> Analysis complete!</div>', unsafe_allow_html=True)

@@ -1,5 +1,5 @@
 """
-Research Agent: Parallel OpenAI-powered company analysis
+Research Agent: Parallel OpenAI-powered company analysis with Tavily web search
 """
 import asyncio
 import json
@@ -7,26 +7,75 @@ import os
 from datetime import datetime
 from typing import Dict, List, Optional, Callable
 from openai import AsyncOpenAI
+from tavily import TavilyClient
 
 
 class CompanyResearchAgent:
-    """Orchestrates parallel research using OpenAI API"""
+    """Orchestrates parallel research using OpenAI API with Tavily web search"""
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, tavily_api_key: Optional[str] = None):
         self.client = AsyncOpenAI(api_key=api_key)
         self.model = "gpt-4-turbo-preview"
+        self.tavily = TavilyClient(api_key=tavily_api_key) if tavily_api_key else None
+
+    def _search_web(self, query: str, max_results: int = 5) -> str:
+        """
+        Search the web using Tavily and return formatted results
+
+        Args:
+            query: Search query
+            max_results: Maximum number of results to return
+
+        Returns:
+            Formatted string with search results
+        """
+        if not self.tavily:
+            return "Web search not available (Tavily API key not provided)"
+
+        try:
+            response = self.tavily.search(
+                query=query,
+                search_depth="advanced",
+                max_results=max_results
+            )
+
+            results = []
+            for result in response.get('results', []):
+                results.append(f"""
+Source: {result.get('url', 'N/A')}
+Title: {result.get('title', 'N/A')}
+Content: {result.get('content', 'N/A')}
+---""")
+
+            return '\n'.join(results) if results else "No results found"
+        except Exception as e:
+            return f"Web search error: {str(e)}"
 
     async def research_company_profile(
         self,
         company_name: str,
         progress_callback: Optional[Callable] = None
     ) -> Dict:
-        """Research company profile information"""
+        """Research company profile information using Tavily web search"""
 
         if progress_callback:
-            progress_callback("Company Profile")
+            progress_callback("Company Profile - Searching web...")
 
-        prompt = f"""Research {company_name} and provide detailed information in JSON format:
+        # Search the web for company information
+        search_results = self._search_web(
+            f"{company_name} company profile headquarters revenue employees industry business model",
+            max_results=5
+        )
+
+        if progress_callback:
+            progress_callback("Company Profile - Analyzing results...")
+
+        prompt = f"""Based on the following web search results about {company_name}, provide detailed information in JSON format:
+
+WEB SEARCH RESULTS:
+{search_results}
+
+Using the above search results, extract and structure the following information:
 
 Required fields:
 - legal_name: Official registered company name
@@ -127,14 +176,26 @@ If specific colors cannot be determined with confidence, use industry-appropriat
         company_name: str,
         progress_callback: Optional[Callable] = None
     ) -> List[Dict]:
-        """Research company's top strategic priorities"""
+        """Research company's top strategic priorities using Tavily web search"""
 
         if progress_callback:
-            progress_callback("Strategic Priorities")
+            progress_callback("Strategic Priorities - Searching web...")
 
-        prompt = f"""Research {company_name} and identify their top 3 strategic business priorities.
+        # Search for strategic priorities and initiatives
+        search_results = self._search_web(
+            f"{company_name} strategic priorities 2024 2025 earnings call investor presentation CEO initiatives",
+            max_results=5
+        )
 
-Research the company's:
+        if progress_callback:
+            progress_callback("Strategic Priorities - Analyzing results...")
+
+        prompt = f"""Based on the following web search results about {company_name}, identify their top 3 strategic business priorities.
+
+WEB SEARCH RESULTS:
+{search_results}
+
+Using the above search results, analyze the company's:
 - Current strategic initiatives and public announcements
 - Recent earnings calls and investor presentations
 - Industry trends and competitive positioning
@@ -181,12 +242,26 @@ Return ONLY valid JSON with an array of 3 priorities under the key "priorities".
         company_name: str,
         progress_callback: Optional[Callable] = None
     ) -> List[Dict]:
-        """Research business units and divisions"""
+        """Research business units and divisions using Tavily web search"""
 
         if progress_callback:
-            progress_callback("Business Units")
+            progress_callback("Business Units - Searching web...")
 
-        prompt = f"""Analyze {company_name}'s business structure and identify 2-4 major business units or divisions.
+        # Search for business units and organizational structure
+        search_results = self._search_web(
+            f"{company_name} business units divisions organizational structure segments revenue breakdown",
+            max_results=5
+        )
+
+        if progress_callback:
+            progress_callback("Business Units - Analyzing results...")
+
+        prompt = f"""Based on the following web search results about {company_name}, analyze their business structure and identify 2-4 major business units or divisions.
+
+WEB SEARCH RESULTS:
+{search_results}
+
+Using the above search results, identify the major business units or divisions:
 
 For each business unit, provide in JSON format:
 - unit_id: Unique identifier (e.g., "bu_001")
