@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from research_agent import CompanyResearchAgent
 from export_manager import ExportManager
+from sheets_storage import SheetsStorageManager
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -407,13 +408,13 @@ def display_opportunities(opportunities: list):
     with st.expander("Optimization Opportunities", expanded=False):
         for i, opp in enumerate(opportunities, 1):
             priority = opp.get('implementation', {}).get('priority', 'medium')
-            priority_color = {
-                'high': '🔴',
-                'medium': '🟡',
-                'low': '🟢'
-            }.get(priority, '⚪')
+            priority_icon = {
+                'high': '<i class="fas fa-exclamation-circle" style="color: #e53e3e;"></i>',
+                'medium': '<i class="fas fa-minus-circle" style="color: #f6ad55;"></i>',
+                'low': '<i class="fas fa-check-circle" style="color: #38a169;"></i>'
+            }.get(priority, '<i class="fas fa-circle"></i>')
 
-            st.markdown(f"### {priority_color} {i}. {opp.get('title', 'Unknown')}")
+            st.markdown(f"### {priority_icon} {i}. {opp.get('title', 'Unknown')}", unsafe_allow_html=True)
             st.markdown(opp.get('description', ''))
 
             # Function and Systems context
@@ -427,7 +428,7 @@ def display_opportunities(opportunities: list):
                         st.markdown(f"**Function:** {business_function}")
                 with col2:
                     if systems_impacted:
-                        st.markdown(f"**🔧 Systems:** {', '.join(systems_impacted)}")
+                        st.markdown(f"**Systems:** {', '.join(systems_impacted)}")
 
             # Value metrics
             value_quant = opp.get('value_quantification', {})
@@ -643,56 +644,53 @@ def main():
 
     init_session_state()
 
+    # Initialize Google Sheets storage
+    if 'storage' not in st.session_state:
+        st.session_state.storage = SheetsStorageManager()
+
     # Header
     st.markdown('<h1 class="main-header">Agreement Map</h1>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">AI-Powered Company Analysis & Agreement Landscape Research</p>', unsafe_allow_html=True)
 
     # Sidebar
     with st.sidebar:
-        st.markdown('### <i class="fas fa-cog" style="color: rgb(255, 75, 75);"></i> Configuration', unsafe_allow_html=True)
+        # Saved Analyses Section
+        st.markdown('### <i class="fas fa-database"></i> Saved Analyses', unsafe_allow_html=True)
 
-        # Check if API keys are already in environment
-        env_openai_key = os.environ.get('OPENAI_API_KEY')
-        env_tavily_key = os.environ.get('TAVILY_API_KEY')
+        if st.session_state.storage.is_configured():
+            saved_analyses = st.session_state.storage.list_analyses()
 
-        # OpenAI API Key
-        if env_openai_key:
-            st.success("OpenAI API Key loaded from .env file")
-            api_key = env_openai_key
+            if saved_analyses:
+                st.caption(f"{len(saved_analyses)} saved analyses")
+
+                for analysis in saved_analyses[:10]:  # Show last 10
+                    col1, col2 = st.columns([4, 1])
+
+                    with col1:
+                        # Use Font Awesome icon instead of emoji
+                        button_label = f'{analysis["display_name"]}'
+                        if st.button(button_label, key=f"load_{analysis['row_index']}", use_container_width=True):
+                            loaded_data = st.session_state.storage.load_analysis(analysis['row_index'])
+                            if loaded_data:
+                                st.session_state.analysis_result = loaded_data
+                                st.success(f"Loaded: {analysis['company_name']}")
+                                st.rerun()
+
+                    with col2:
+                        if st.button("Delete", key=f"del_{analysis['row_index']}"):
+                            if st.session_state.storage.delete_analysis(analysis['row_index']):
+                                st.success("Deleted!")
+                                st.rerun()
+            else:
+                st.caption("No saved analyses yet")
         else:
-            api_key = st.text_input(
-                "OpenAI API Key",
-                type="password",
-                help="Enter your OpenAI API key. Get one at https://platform.openai.com/api-keys"
-            )
-            if api_key:
-                os.environ['OPENAI_API_KEY'] = api_key
-
-        # Tavily API Key
-        if env_tavily_key:
-            st.success("Tavily API Key loaded from .env file")
-            tavily_key = env_tavily_key
-        else:
-            tavily_key = st.text_input(
-                "Tavily API Key (Optional)",
-                type="password",
-                help="Enter your Tavily API key for web search. Get one at https://tavily.com"
-            )
-            if tavily_key:
-                os.environ['TAVILY_API_KEY'] = tavily_key
-
-        # Handle case where tavily_key might not be set
-        if 'tavily_key' not in locals():
-            tavily_key = None
-
-        if tavily_key:
-            st.info("Web search enabled via Tavily")
-        else:
-            st.warning("No Tavily key - using GPT knowledge only")
+            st.caption("Google Sheets not configured")
+            st.caption("See setup instructions below")
 
         st.markdown("---")
 
-        st.markdown('### <i class="fas fa-book" style="color: rgb(255, 75, 75);"></i> About', unsafe_allow_html=True)
+        # About & Features Section (plain, not in expander)
+        st.markdown('### <i class="fas fa-info-circle"></i> About & Features', unsafe_allow_html=True)
         st.markdown("""
         This tool uses AI to research companies and generate comprehensive agreement landscape analyses.
 
@@ -704,9 +702,51 @@ def main():
         - Optimization opportunities
         - Interactive visualization
         - Web search via Tavily (optional)
+        - Save to Google Sheets (optional)
         """)
 
         st.markdown("---")
+
+        # Configuration Section (at bottom, collapsible)
+        with st.expander("Configuration", expanded=False):
+            # Check if API keys are already in environment
+            env_openai_key = os.environ.get('OPENAI_API_KEY')
+            env_tavily_key = os.environ.get('TAVILY_API_KEY')
+
+            # OpenAI API Key
+            if env_openai_key:
+                st.success("OpenAI API Key loaded from .env file")
+                api_key = env_openai_key
+            else:
+                api_key = st.text_input(
+                    "OpenAI API Key",
+                    type="password",
+                    help="Enter your OpenAI API key. Get one at https://platform.openai.com/api-keys"
+                )
+                if api_key:
+                    os.environ['OPENAI_API_KEY'] = api_key
+
+            # Tavily API Key
+            if env_tavily_key:
+                st.success("Tavily API Key loaded from .env file")
+                tavily_key = env_tavily_key
+            else:
+                tavily_key = st.text_input(
+                    "Tavily API Key (Optional)",
+                    type="password",
+                    help="Enter your Tavily API key for web search. Get one at https://tavily.com"
+                )
+                if tavily_key:
+                    os.environ['TAVILY_API_KEY'] = tavily_key
+
+            # Handle case where tavily_key might not be set
+            if 'tavily_key' not in locals():
+                tavily_key = None
+
+            if tavily_key:
+                st.info("Web search enabled via Tavily")
+            else:
+                st.warning("No Tavily key - using GPT knowledge only")
 
     # Main content
     if not api_key:
@@ -775,7 +815,21 @@ def main():
             result = asyncio.run(run_research(company_name, api_key, tavily_key, progress_containers, None))
 
             st.session_state.analysis_result = result
-            st.markdown('<div class="success-box"><i class="fas fa-check-circle" style="color: rgb(255, 75, 75);"></i> Analysis complete!</div>', unsafe_allow_html=True)
+
+            # Auto-save to Google Sheets
+            if st.session_state.storage.is_configured():
+                try:
+                    if st.session_state.storage.save_analysis(company_name, result):
+                        st.markdown('<div class="success-box"><i class="fas fa-check-circle" style="color: rgb(255, 75, 75);"></i> Analysis complete and saved to Google Sheets!</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown('<div class="success-box"><i class="fas fa-check-circle" style="color: rgb(255, 75, 75);"></i> Analysis complete!</div>', unsafe_allow_html=True)
+                        st.warning("Could not save to Google Sheets")
+                except Exception as save_error:
+                    st.markdown('<div class="success-box"><i class="fas fa-check-circle" style="color: rgb(255, 75, 75);"></i> Analysis complete!</div>', unsafe_allow_html=True)
+                    st.warning(f"Save to Google Sheets failed: {save_error}")
+            else:
+                st.markdown('<div class="success-box"><i class="fas fa-check-circle" style="color: rgb(255, 75, 75);"></i> Analysis complete!</div>', unsafe_allow_html=True)
+                st.info("Configure Google Sheets to save analyses")
 
         except Exception as e:
             st.error(f"Error during analysis: {str(e)}")
