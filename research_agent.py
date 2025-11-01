@@ -7,7 +7,14 @@ import os
 from datetime import datetime
 from typing import Dict, List, Optional, Callable
 from openai import AsyncOpenAI
-from tavily import TavilyClient
+
+# Try to import Tavily, but make it optional
+try:
+    from tavily import TavilyClient
+    TAVILY_AVAILABLE = True
+except ImportError:
+    TAVILY_AVAILABLE = False
+    TavilyClient = None
 
 
 class CompanyResearchAgent:
@@ -16,7 +23,12 @@ class CompanyResearchAgent:
     def __init__(self, api_key: str, tavily_api_key: Optional[str] = None):
         self.client = AsyncOpenAI(api_key=api_key)
         self.model = "gpt-4-turbo-preview"
-        self.tavily = TavilyClient(api_key=tavily_api_key) if tavily_api_key else None
+
+        # Only initialize Tavily if it's available and API key is provided
+        if TAVILY_AVAILABLE and tavily_api_key:
+            self.tavily = TavilyClient(api_key=tavily_api_key)
+        else:
+            self.tavily = None
 
     def _search_web(self, query: str, max_results: int = 5) -> str:
         """
