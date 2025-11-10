@@ -9,6 +9,11 @@ from typing import Dict, List, Optional, Callable
 from pathlib import Path
 from openai import AsyncOpenAI
 from tavily import TavilyClient
+from verification import (
+    score_source_credibility,
+    verify_quote_url,
+    calculate_quote_confidence
+)
 
 
 class CompanyResearchAgent:
@@ -42,6 +47,33 @@ class CompanyResearchAgent:
             # Silently fail - catalog is optional
             return None
 
+    def _search_web_raw(self, query: str, max_results: int = 5) -> List[Dict]:
+        """
+        Search the web using Tavily and return raw results
+
+        Args:
+            query: Search query
+            max_results: Maximum number of results to return
+
+        Returns:
+            List of result dictionaries with url, title, content
+        """
+        if not self.tavily:
+            return []
+
+        try:
+            response = self.tavily.search(
+                query=query,
+                search_depth="advanced",
+                max_results=max_results
+            )
+
+            return response.get('results', [])
+
+        except Exception as e:
+            print(f"Tavily search error: {e}")
+            return []
+
     def _search_web(self, query: str, max_results: int = 5) -> str:
         """
         Search the web using Tavily and return formatted results
@@ -53,27 +85,20 @@ class CompanyResearchAgent:
         Returns:
             Formatted string with search results
         """
-        if not self.tavily:
-            return "Web search not available (Tavily API key not provided)"
+        raw_results = self._search_web_raw(query, max_results)
 
-        try:
-            response = self.tavily.search(
-                query=query,
-                search_depth="advanced",
-                max_results=max_results
-            )
+        if not raw_results:
+            return "Web search not available (Tavily API key not provided)" if not self.tavily else "No results found"
 
-            results = []
-            for result in response.get('results', []):
-                results.append(f"""
+        results = []
+        for result in raw_results:
+            results.append(f"""
 Source: {result.get('url', 'N/A')}
 Title: {result.get('title', 'N/A')}
 Content: {result.get('content', 'N/A')}
 ---""")
 
-            return '\n'.join(results) if results else "No results found"
-        except Exception as e:
-            return f"Web search error: {str(e)}"
+        return '\n'.join(results) if results else "No results found"
 
     async def research_company_profile(
         self,
@@ -206,6 +231,10 @@ If specific colors cannot be determined with confidence, use industry-appropriat
         if progress_callback:
             progress_callback("Strategic Priorities - Searching executive interviews...")
 
+        exec_search_results_raw = self._search_web_raw(
+            f"{company_name} CEO CFO interview 2024 2025 strategy vision keynote",
+            max_results=7
+        )
         exec_search_results = self._search_web(
             f"{company_name} CEO CFO interview 2024 2025 strategy vision keynote",
             max_results=7
@@ -215,6 +244,10 @@ If specific colors cannot be determined with confidence, use industry-appropriat
         if progress_callback:
             progress_callback("Strategic Priorities - Searching earnings transcripts...")
 
+        earnings_search_results_raw = self._search_web_raw(
+            f"{company_name} earnings call transcript Q3 Q4 2024 strategic priorities initiatives",
+            max_results=7
+        )
         earnings_search_results = self._search_web(
             f"{company_name} earnings call transcript Q3 Q4 2024 strategic priorities initiatives",
             max_results=7
@@ -224,12 +257,16 @@ If specific colors cannot be determined with confidence, use industry-appropriat
         if progress_callback:
             progress_callback("Strategic Priorities - Analyzing evolution...")
 
+        historical_search_results_raw = self._search_web_raw(
+            f"{company_name} strategic initiatives announcements expansion 2023 2024",
+            max_results=6
+        )
         historical_search_results = self._search_web(
             f"{company_name} strategic initiatives announcements expansion 2023 2024",
             max_results=6
         )
 
-        # Combine all search results
+        # Combine all search results (formatted for GPT)
         search_results = f"""
 === EXECUTIVE INTERVIEWS & STATEMENTS (2024-2025) ===
 {exec_search_results}
@@ -240,6 +277,9 @@ If specific colors cannot be determined with confidence, use industry-appropriat
 === HISTORICAL CONTEXT (2023-2024) ===
 {historical_search_results}
 """
+
+        # Combine raw search results (for verification)
+        all_search_results_raw = exec_search_results_raw + earnings_search_results_raw + historical_search_results_raw
 
         if progress_callback:
             progress_callback("Strategic Priorities - Synthesizing insights...")
@@ -301,12 +341,35 @@ Return ONLY valid JSON with an array of 3 priorities under the key "priorities".
 
         result = json.loads(response.choices[0].message.content)
 
+        # Verify executive quotes
+        priorities = result.get('priorities', [])
+        if progress_callback:
+            progress_callback("Strategic Priorities - Verifying executive quotes...")
+
+        for priority in priorities:
+            executive_quotes = priority.get('executive_quotes', [])
+            for quote in executive_quotes:
+                # Calculate confidence score using verification
+                confidence = calculate_quote_confidence(quote, all_search_results_raw)
+                quote['confidence_score'] = confidence
+
+                # Get source credibility
+                source = quote.get('source', '')
+                url = quote.get('url', '')
+                credibility = score_source_credibility(source, url)
+                quote['source_credibility'] = credibility
+
+                # Verify URL against search results
+                verification = verify_quote_url(url, all_search_results_raw)
+                quote['verification_status'] = verification['verification_status']
+                quote['verified'] = verification['verified']
+
         # Log token usage
         if progress_callback and hasattr(response, 'usage'):
             usage = response.usage
             progress_callback(f"[✓] Strategic priorities complete | Tokens: {usage.total_tokens} (prompt: {usage.prompt_tokens}, completion: {usage.completion_tokens})")
 
-        return result.get('priorities', [])
+        return priorities
 
     async def research_business_units(
         self,
@@ -660,7 +723,7 @@ The matrix will use:
 - X-axis: Volume (how frequently the agreement type is used/signed) - Scale 1-10
 - Y-axis: Complexity (clauses, stakeholders, legal review, customization) - Scale 1-10
 
-Identify the top 20 agreement types most relevant to {company_name} based on their industry, operations, and common practices. Include both internal (within company) and external (with customers, vendors, regulators) agreements.
+Identify the top 15 agreement types most relevant to {company_name} based on their industry, operations, and common practices. Include both internal (within company) and external (with customers, vendors, regulators) agreements.
 
 For EACH agreement type, provide in JSON format:
 - type: Agreement type name (e.g., "Non-Disclosure Agreements", "Master Service Agreements")
@@ -680,9 +743,11 @@ Also provide:
 
 Base suggestions on what is typical for companies in this industry if exact internal details are unavailable.
 
+IMPORTANT: Return EXACTLY 15 agreement types.
+
 Return as valid JSON with structure:
 {{
-  "agreement_types": [...array of 20 agreement type objects...],
+  "agreement_types": [...array of exactly 15 agreement type objects...],
   "matrix_metadata": {{...}}
 }}
 """
@@ -830,6 +895,19 @@ Return as valid JSON with structure:
             }
         }
 
+        # Phase 4: Generate sales enablement content (executive summary, discovery questions, product aggregation)
+        print("Generating executive summary...")
+        executive_summary = await self.generate_executive_summary(analysis)
+        analysis['executive_summary'] = executive_summary
+
+        print("Generating discovery questions...")
+        discovery_questions = await self.generate_discovery_questions(analysis)
+        analysis['discovery_questions'] = discovery_questions
+
+        print("Aggregating DocuSign product recommendations...")
+        docusign_product_summary = self.aggregate_product_recommendations(analysis)
+        analysis['docusign_product_summary'] = docusign_product_summary
+
         return analysis
 
     def _map_priorities_to_capabilities(
@@ -965,3 +1043,286 @@ Return as valid JSON with structure:
             return f"${value/1_000:.0f}K"
         else:
             return f"${value:.0f}"
+
+    async def generate_executive_summary(self, analysis_data: Dict) -> Dict:
+        """
+        Generate executive summary bullets from completed analysis
+
+        Args:
+            analysis_data: Complete analysis dictionary
+
+        Returns:
+            Dictionary with "bullets" list containing 3-5 summary points
+        """
+        profile = analysis_data.get('company_profile', {})
+        scale = profile.get('scale', {})
+        business_units = analysis_data.get('business_units', [])
+        opportunities = analysis_data.get('optimization_opportunities', [])
+        portfolio = analysis_data.get('portfolio_summary', {})
+        strategic_priorities = analysis_data.get('strategic_priorities', [])
+        landscape_summary = analysis_data.get('agreement_landscape_summary', {})
+
+        # Build context for GPT
+        context = f"""
+Company: {analysis_data.get('_meta', {}).get('company_name', 'Unknown')}
+Industry: {profile.get('industry', 'Unknown')}
+Revenue: {scale.get('annual_revenue', 'N/A')}
+Employees: {scale.get('employees', 'N/A')}
+Countries: {scale.get('countries', 'N/A')}
+Business Units: {len(business_units)}
+
+Top Strategic Priorities:
+{chr(10).join([f"- {p.get('priority_name', 'Unknown')}: {p.get('priority_description', '')}" for p in strategic_priorities[:3]])}
+
+Optimization Opportunities: {portfolio.get('total_opportunities', 0)} opportunities totaling {portfolio.get('total_annual_value', 'N/A')} annual value
+ROI: {portfolio.get('portfolio_roi', 'N/A')}
+Payback: {portfolio.get('portfolio_payback', 'N/A')}
+
+Agreement Landscape: {landscape_summary.get('total_estimated_agreements', 'Unknown')} total agreements
+
+Key Pain Points:
+{chr(10).join([f"- {opp.get('title', 'Unknown')}" for opp in opportunities[:3]])}
+"""
+
+        prompt = f"""Based on this company analysis, create a concise executive summary with 3-5 bullet points.
+
+{context}
+
+Generate 3-5 bullet points that capture:
+1. Company scale and industry (revenue, employees, geographic reach)
+2. Top 1-2 strategic priorities with investment levels if available
+3. Total opportunity value, ROI, and payback period
+4. Agreement landscape scope and complexity
+5. Top 2-3 pain points or challenges
+
+Format: Return ONLY a JSON object with this structure:
+{{
+  "bullets": [
+    "First bullet point",
+    "Second bullet point",
+    ...
+  ]
+}}
+
+Keep each bullet to 1-2 sentences maximum. Be specific with numbers and metrics."""
+
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are an expert business analyst creating executive summaries."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7
+            )
+
+            content = response.choices[0].message.content.strip()
+
+            # Extract JSON from response
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+
+            summary = json.loads(content)
+
+            return summary
+
+        except Exception as e:
+            print(f"Error generating executive summary: {e}")
+            # Return fallback summary
+            return {
+                "bullets": [
+                    f"{scale.get('annual_revenue', 'N/A')} revenue company with {scale.get('employees', 'N/A')} employees",
+                    f"{portfolio.get('total_opportunities', 0)} opportunities totaling {portfolio.get('total_annual_value', 'N/A')} annual value",
+                    f"Agreement landscape spans {landscape_summary.get('total_estimated_agreements', 'Unknown')} contracts"
+                ]
+            }
+
+    async def generate_discovery_questions(self, analysis_data: Dict) -> List[str]:
+        """
+        Generate discovery questions based on analysis findings
+
+        Args:
+            analysis_data: Complete analysis dictionary
+
+        Returns:
+            List of 5-7 discovery questions
+        """
+        profile = analysis_data.get('company_profile', {})
+        strategic_priorities = analysis_data.get('strategic_priorities', [])
+        business_units = analysis_data.get('business_units', [])
+        opportunities = analysis_data.get('optimization_opportunities', [])
+        landscape_summary = analysis_data.get('agreement_landscape_summary', {})
+
+        # Build context
+        context = f"""
+Company: {analysis_data.get('_meta', {}).get('company_name', 'Unknown')}
+Industry: {profile.get('industry', 'Unknown')}
+
+Strategic Priorities:
+{chr(10).join([f"- {p.get('priority_name', 'Unknown')}: {p.get('priority_description', '')}" for p in strategic_priorities[:3]])}
+
+Pain Points Identified:
+{chr(10).join([f"- {opp.get('title', 'Unknown')}: {opp.get('current_state', {}).get('pain_points', [])[0] if opp.get('current_state', {}).get('pain_points') else ''}" for opp in opportunities[:3]])}
+
+Business Units:
+{chr(10).join([f"- {bu.get('name', 'Unknown')}: {bu.get('description', '')}" for bu in business_units[:3]])}
+
+Agreement Volume: {landscape_summary.get('total_estimated_agreements', 'Unknown')}
+"""
+
+        prompt = f"""Based on this company analysis, generate 5-7 discovery questions that a salesperson should ask to validate these findings and uncover additional needs.
+
+{context}
+
+Generate questions that:
+1. Reference specific findings from the analysis (strategic priorities, pain points, etc.)
+2. Are open-ended to encourage discussion
+3. Validate assumptions made in the analysis
+4. Uncover decision-makers and buying process
+5. Explore current systems and processes
+6. Identify additional pain points or opportunities
+
+Format: Return ONLY a JSON array of question strings:
+[
+  "Question 1...",
+  "Question 2...",
+  ...
+]
+
+Each question should be 1-2 sentences maximum."""
+
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are an expert sales consultant creating discovery questions."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7
+            )
+
+            content = response.choices[0].message.content.strip()
+
+            # Extract JSON from response
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+
+            questions = json.loads(content)
+
+            return questions if isinstance(questions, list) else []
+
+        except Exception as e:
+            print(f"Error generating discovery questions: {e}")
+            # Return fallback questions
+            return [
+                f"What systems are you currently using to manage your agreement lifecycle across {len(business_units)} business units?",
+                "What are the biggest challenges your team faces with contract management today?",
+                "Who in your organization is responsible for contract management strategy?",
+                "How do you currently track contract renewals and compliance obligations?",
+                "What would be the impact of reducing contract cycle times by 50%?"
+            ]
+
+    def aggregate_product_recommendations(self, analysis_data: Dict) -> Dict:
+        """
+        Aggregate DocuSign product recommendations from all opportunities
+
+        Args:
+            analysis_data: Complete analysis dictionary
+
+        Returns:
+            Dictionary with aggregated product information
+        """
+        opportunities = analysis_data.get('optimization_opportunities', [])
+
+        # Collect all recommended products
+        product_map = {}
+
+        for opp in opportunities:
+            recommended_products = opp.get('recommended_docusign_products', [])
+            use_case_name = opp.get('use_case_name', opp.get('title', 'Unknown'))
+
+            for product in recommended_products:
+                product_name = product.get('product_name', 'Unknown')
+
+                if product_name not in product_map:
+                    product_map[product_name] = {
+                        'product_name': product_name,
+                        'category': product.get('category', 'Unknown'),
+                        'use_cases_enabled': [],
+                        'key_capabilities_relevant': set(),
+                        'estimated_value_enabled': 0,
+                        'why_recommended_list': []
+                    }
+
+                # Add use case
+                if use_case_name not in product_map[product_name]['use_cases_enabled']:
+                    product_map[product_name]['use_cases_enabled'].append(use_case_name)
+
+                # Add capabilities
+                for cap in product.get('key_capabilities_used', []):
+                    product_map[product_name]['key_capabilities_relevant'].add(cap)
+
+                # Add value (parse from opportunity)
+                value_str = opp.get('value_quantification', {}).get('total_annual_value', '0')
+                value = self._parse_currency(value_str)
+                product_map[product_name]['estimated_value_enabled'] += value
+
+                # Collect reasons
+                why = product.get('why_recommended', '')
+                if why and why not in product_map[product_name]['why_recommended_list']:
+                    product_map[product_name]['why_recommended_list'].append(why)
+
+        # Convert to final format
+        products_list = []
+        for product_name, data in product_map.items():
+            products_list.append({
+                'product_name': product_name,
+                'category': data['category'],
+                'use_cases_enabled': data['use_cases_enabled'],
+                'key_capabilities_relevant': list(data['key_capabilities_relevant']),
+                'estimated_value_enabled': self._format_currency(data['estimated_value_enabled']),
+                'why_recommended': ' '.join(data['why_recommended_list'])
+            })
+
+        # Sort by value (descending)
+        products_list.sort(key=lambda p: self._parse_currency(p['estimated_value_enabled']), reverse=True)
+
+        return {
+            'products': products_list,
+            'total_products_recommended': len(products_list),
+            'implementation_approach': self._generate_implementation_approach(products_list, opportunities)
+        }
+
+    def _generate_implementation_approach(self, products: List[Dict], opportunities: List[Dict]) -> str:
+        """Generate implementation approach recommendation"""
+        if not opportunities:
+            return "Contact DocuSign for implementation planning."
+
+        # Sort opportunities by priority
+        high_priority = [o for o in opportunities if o.get('implementation', {}).get('priority') == 'high']
+        medium_priority = [o for o in opportunities if o.get('implementation', {}).get('priority') == 'medium']
+
+        approach_parts = []
+
+        if high_priority:
+            use_case = high_priority[0].get('use_case_name', high_priority[0].get('title', 'Unknown'))
+            timeline = high_priority[0].get('implementation', {}).get('timeline', '6-9 months')
+            approach_parts.append(f"Start with {use_case} (high priority, {timeline})")
+
+        if medium_priority:
+            use_case = medium_priority[0].get('use_case_name', medium_priority[0].get('title', 'Unknown'))
+            timeline = medium_priority[0].get('implementation', {}).get('timeline', '4-6 months')
+            if approach_parts:
+                approach_parts.append(f"then expand to {use_case} (medium priority, {timeline})")
+            else:
+                approach_parts.append(f"Start with {use_case} (medium priority, {timeline})")
+
+        if len(products) > 1:
+            product_names = [p['product_name'] for p in products[:2]]
+            approach_parts.append(f"Integrate {' and '.join(product_names)} throughout")
+
+        return "Phased rollout: " + ", ".join(approach_parts) + "." if approach_parts else "Contact DocuSign for implementation planning."

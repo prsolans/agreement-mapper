@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from research_agent import CompanyResearchAgent
 from export_manager import ExportManager
-from sheets_storage import SheetsStorageManager
+from supabase_storage import SupabaseStorageManager
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -31,9 +31,7 @@ st.markdown("""
     .main-header {
         font-size: 3rem;
         font-weight: 700;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: #4a5568;
         margin-bottom: 0.5rem;
     }
     .sub-header {
@@ -51,8 +49,9 @@ st.markdown("""
     .info-box {
         padding: 1rem;
         border-radius: 0.5rem;
-        background-color: #bee3f8;
-        border-left: 4px solid #3182ce;
+        background-color: #2c5282;
+        border-left: 4px solid #1a365d;
+        color: white;
         margin: 1rem 0;
     }
     .warning-box {
@@ -572,7 +571,8 @@ def display_visualization(analysis: dict):
                         data=png_bytes,
                         file_name=filename,
                         mime="image/png",
-                        use_container_width=True
+                        use_container_width=True,
+                        key="download_png_viz"
                     )
 
                     st.success("PNG generated successfully!")
@@ -600,7 +600,8 @@ def display_visualization(analysis: dict):
                         data=pptx_bytes,
                         file_name=filename,
                         mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                        use_container_width=True
+                        use_container_width=True,
+                        key="download_pptx_viz_col2"
                     )
 
                     st.success("PowerPoint created successfully! (Import to Google Slides)")
@@ -629,7 +630,8 @@ def display_visualization(analysis: dict):
                     data=docx_bytes,
                     file_name=filename,
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True
+                    use_container_width=True,
+                    key="download_docx_viz_bottom"
                 )
 
                 st.success("Word document created successfully!")
@@ -639,14 +641,358 @@ def display_visualization(analysis: dict):
                 st.exception(e)
 
 
+def display_main_analysis_slides(analysis: dict):
+    """
+    Display analysis content organized by slides for easy copy/paste.
+    Mirrors the Word Doc export structure.
+    """
+    company_name = analysis.get('_meta', {}).get('company_name', 'Company')
+    profile = analysis.get('company_profile', {})
+    scale = profile.get('scale', {})
+    business_units = analysis.get('business_units', [])
+    landscape = analysis.get('agreement_landscape_by_function', {})
+    functions = landscape.get('functions', []) if isinstance(landscape, dict) else []
+    opportunities = analysis.get('optimization_opportunities', [])
+    priority_mappings = analysis.get('priority_mappings', [])
+    strategic_priorities = analysis.get('strategic_priorities', [])
+    agreement_matrix = analysis.get('agreement_matrix', {})
+    matrix_types = agreement_matrix.get('agreement_types', [])
+
+    # ===== EXECUTIVE SUMMARY =====
+    executive_summary = analysis.get('executive_summary', {})
+    bullets = executive_summary.get('bullets', [])
+
+    st.markdown("### 📌 Executive Summary")
+    if bullets:
+        for bullet in bullets:
+            st.markdown(f"- {bullet}")
+    else:
+        st.info("Executive summary not available for this analysis.")
+    st.markdown("---")
+
+    # ===== SLIDE 1: COMPANY HEADER & PROFILE =====
+    with st.expander("📄 SLIDE 1: Company Header & Profile", expanded=False):
+        st.markdown(f"**Company:** {company_name}")
+        st.markdown(f"**Industry:** {profile.get('industry', 'N/A')}")
+        st.markdown("")
+
+        # Metrics table
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Metric**")
+            st.markdown("Annual Revenue")
+            st.markdown("Employees")
+            st.markdown("Locations")
+        with col2:
+            st.markdown("**Value**")
+            st.markdown(scale.get('annual_revenue', 'N/A'))
+            st.markdown(str(scale.get('employees', 'N/A')))
+            st.markdown(str(scale.get('locations', 'N/A')))
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("Countries")
+            st.markdown("Business Units")
+        with col2:
+            st.markdown(str(scale.get('countries', 'N/A')))
+            st.markdown(str(len(business_units)))
+
+    # ===== SLIDE 2: AGREEMENT LANDSCAPE BY FUNCTION =====
+    with st.expander("📄 SLIDE 2: Agreement Landscape by Function", expanded=False):
+        st.markdown("**Business functions and their agreement management**")
+        st.markdown("")
+
+        if functions:
+            import pandas as pd
+            table_data = []
+            for func in functions:
+                complexity = func.get('complexity', 3)
+                complexity_text = "Complex, Negotiated" if complexity >= 4 else "Moderate Complexity"
+                systems = func.get('systems_used', [])
+
+                table_data.append({
+                    'Function': func.get('function_name', 'N/A'),
+                    'Complexity': complexity_text,
+                    'Total Agreements': str(func.get('total_agreements', 'N/A')),
+                    'Systems': ', '.join(systems) if systems else 'N/A'
+                })
+
+            df = pd.DataFrame(table_data)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No function data available in this analysis.")
+
+    # ===== SLIDE 3: PRIORITIES MAPPED TO CAPABILITIES =====
+    with st.expander("📄 SLIDE 3: Priorities Mapped to Capabilities", expanded=False):
+        st.markdown("**Strategic Alignment**")
+        st.markdown("")
+
+        if priority_mappings:
+            for idx, mapping in enumerate(priority_mappings[:3], start=1):
+                priority_name = mapping.get('priority_name', f'Priority {idx}')
+                priority_description = mapping.get('priority_description', '')
+                priority_id = mapping.get('priority_id', '')
+                capability_name = mapping.get('capability_name', f'Capability {idx}')
+                capability_description = mapping.get('capability_description', '')
+
+                st.markdown(f"#### {idx}. {priority_name} → {capability_name}")
+                st.markdown(f"**Priority:** {priority_description}")
+                st.markdown(f"**Capability:** {capability_description}")
+                st.markdown("")
+
+                # Find strategic priority data for notes
+                priority_data = None
+                if strategic_priorities:
+                    for priority in strategic_priorities:
+                        if priority.get('priority_id') == priority_id or priority.get('priority_name') == priority_name:
+                            priority_data = priority
+                            break
+
+                # SLIDE NOTES section
+                if priority_data:
+                    st.markdown("---")
+                    st.markdown("**SLIDE NOTES (Copy to Slide Notes):**")
+
+                    executive_owner = priority_data.get('executive_owner', '')
+                    if executive_owner:
+                        st.markdown(f"**Executive Owner:** {executive_owner}")
+
+                    executive_responsibility = priority_data.get('executive_responsibility', '')
+                    if executive_responsibility:
+                        st.markdown(f"**Executive Responsibility:** {executive_responsibility}")
+
+                    executive_quotes = priority_data.get('executive_quotes', [])
+                    if executive_quotes:
+                        st.markdown("**Executive Quotes:**")
+                        for quote in executive_quotes:
+                            quote_text = quote.get('quote', '')
+                            exec_name = quote.get('executive', 'Unknown')
+                            source = quote.get('source', '')
+                            date = quote.get('date', '')
+                            url = quote.get('url', '')
+
+                            # Verification indicators
+                            confidence_score = quote.get('confidence_score', None)
+                            verified = quote.get('verified', None)
+                            verification_status = quote.get('verification_status', None)
+
+                            # Build confidence indicator
+                            confidence_indicator = ""
+                            if confidence_score is not None:
+                                if confidence_score >= 0.8:
+                                    confidence_indicator = f"🟢 High confidence ({confidence_score})"
+                                elif confidence_score >= 0.6:
+                                    confidence_indicator = f"🟡 Medium confidence ({confidence_score})"
+                                else:
+                                    confidence_indicator = f"🔴 Low confidence ({confidence_score})"
+
+                            # Build verification indicator
+                            verification_indicator = ""
+                            if verified is not None:
+                                if verified:
+                                    verification_indicator = "✓ Verified"
+                                else:
+                                    verification_indicator = "⚠ Unverified"
+
+                            st.markdown(f"- *\"{quote_text}\"*")
+                            st.markdown(f"  — {exec_name}, {source}, {date}")
+                            if confidence_indicator or verification_indicator:
+                                indicators = " | ".join(filter(None, [confidence_indicator, verification_indicator]))
+                                st.markdown(f"  {indicators}")
+                            if url:
+                                st.markdown(f"  Source: {url}")
+
+                    business_impact = priority_data.get('business_impact', '')
+                    if business_impact:
+                        st.markdown(f"**Business Impact:** {business_impact}")
+
+                    related_initiatives = priority_data.get('related_initiatives', [])
+                    if related_initiatives:
+                        if isinstance(related_initiatives, list):
+                            st.markdown(f"**Related Initiatives:** {', '.join(related_initiatives)}")
+                        else:
+                            st.markdown(f"**Related Initiatives:** {related_initiatives}")
+
+                    sources = priority_data.get('sources', [])
+                    if sources:
+                        if isinstance(sources, list):
+                            st.markdown(f"**Sources:** {'; '.join(sources)}")
+                        else:
+                            st.markdown(f"**Sources:** {sources}")
+
+                st.markdown("")
+        else:
+            st.info("No priority mapping data available in this analysis.")
+
+    # ===== SLIDE 4: TOP 3 IDENTIFIED USE CASES =====
+    with st.expander("📄 SLIDE 4: Top 3 Identified Use Cases", expanded=False):
+        st.markdown("**Intelligent Agreement Management**")
+        st.markdown("")
+
+        if opportunities:
+            for idx, opp in enumerate(opportunities[:3], start=1):
+                use_case_name = opp.get('use_case_name', opp.get('title', f'Use Case {idx}'))
+                capabilities = opp.get('capabilities', opp.get('description', 'N/A'))
+                agreement_types = opp.get('agreement_types', [])
+                risk_reduction = opp.get('risk_reduction', '')
+                compliance = opp.get('compliance_benefits', '')
+                metrics = opp.get('metrics', [])
+
+                st.markdown(f"#### {idx}. {use_case_name}")
+                st.markdown(f"**Capabilities:** {capabilities}")
+
+                if agreement_types:
+                    st.markdown(f"**Agreements:** {', '.join(agreement_types)}")
+
+                if risk_reduction:
+                    st.markdown(f"*Risk Reduction: {risk_reduction}*")
+
+                if compliance:
+                    st.markdown(f"*Compliance Benefits: {compliance}*")
+
+                if metrics:
+                    st.markdown("**Metrics:**")
+                    cols = st.columns(min(len(metrics), 4))
+                    for i, metric in enumerate(metrics[:4]):
+                        with cols[i]:
+                            st.metric(
+                                label=metric.get('label', ''),
+                                value=metric.get('value', 'N/A')
+                            )
+
+                # SLIDE NOTES: Executive Alignment
+                exec_alignment = opp.get('executive_alignment', {})
+                if exec_alignment:
+                    st.markdown("---")
+                    st.markdown("**SLIDE NOTES (Copy to Slide Notes):**")
+                    st.markdown("**Executive Alignment:**")
+
+                    priority_name = exec_alignment.get('priority_name', '')
+                    if priority_name:
+                        st.markdown(f"**Supports Priority:** {priority_name}")
+
+                    exec_champion = exec_alignment.get('executive_champion', '')
+                    if exec_champion:
+                        st.markdown(f"**Executive Champion:** {exec_champion}")
+
+                    alignment_statement = exec_alignment.get('alignment_statement', '')
+                    if alignment_statement:
+                        st.markdown(f"**Alignment:** {alignment_statement}")
+
+                    supporting_quote = exec_alignment.get('supporting_quote', '')
+                    if supporting_quote:
+                        st.markdown(f"**Supporting Quote:** *\"{supporting_quote}\"*")
+
+                        # If there's a full quote object with verification data
+                        supporting_quote_data = exec_alignment.get('supporting_quote_data', {})
+                        if supporting_quote_data:
+                            confidence_score = supporting_quote_data.get('confidence_score', None)
+                            verified = supporting_quote_data.get('verified', None)
+
+                            # Build indicators
+                            indicators = []
+                            if confidence_score is not None:
+                                if confidence_score >= 0.8:
+                                    indicators.append(f"🟢 High confidence ({confidence_score})")
+                                elif confidence_score >= 0.6:
+                                    indicators.append(f"🟡 Medium confidence ({confidence_score})")
+                                else:
+                                    indicators.append(f"🔴 Low confidence ({confidence_score})")
+
+                            if verified is not None:
+                                if verified:
+                                    indicators.append("✓ Verified")
+                                else:
+                                    indicators.append("⚠ Unverified")
+
+                            if indicators:
+                                st.markdown(f"  {' | '.join(indicators)}")
+
+                st.markdown("")
+        else:
+            st.info("No optimization opportunities available in this analysis.")
+
+    # ===== SLIDE 5: AGREEMENT LANDSCAPE MATRIX =====
+    with st.expander("📄 SLIDE 5: Agreement Landscape Matrix", expanded=False):
+        st.markdown("**Agreement types by business unit, volume, and complexity**")
+        st.markdown("")
+
+        if matrix_types:
+            import pandas as pd
+            table_data = []
+            for agr in matrix_types[:18]:  # First 18
+                table_data.append({
+                    'Agreement Type': agr.get('type', 'Unknown'),
+                    'Business Unit': agr.get('business_unit', 'Other'),
+                    'Volume (1-10)': str(agr.get('volume', 5)),
+                    'Complexity (1-10)': str(agr.get('complexity', 5))
+                })
+
+            df = pd.DataFrame(table_data)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No agreement matrix data available in this analysis.")
+
+    st.markdown("---")
+
+    # ===== DISCOVERY QUESTIONS =====
+    discovery_questions = analysis.get('discovery_questions', [])
+
+    with st.expander("🎯 Discovery Questions", expanded=False):
+        if discovery_questions:
+            for idx, question in enumerate(discovery_questions, start=1):
+                st.markdown(f"{idx}. {question}")
+        else:
+            st.info("Discovery questions not available for this analysis.")
+
+    # ===== DOCUSIGN PRODUCT DETAILS =====
+    docusign_product_summary = analysis.get('docusign_product_summary', {})
+    products = docusign_product_summary.get('products', [])
+
+    with st.expander("📦 DocuSign Product Recommendations", expanded=False):
+        if products:
+            for product in products:
+                st.markdown(f"### {product.get('product_name', 'Unknown Product')}")
+                st.markdown(f"**Category:** {product.get('category', 'N/A')}")
+
+                use_cases = product.get('use_cases_enabled', [])
+                if use_cases:
+                    st.markdown(f"**Use Cases Enabled:**")
+                    for uc in use_cases:
+                        st.markdown(f"- {uc}")
+
+                capabilities = product.get('key_capabilities_relevant', [])
+                if capabilities:
+                    st.markdown(f"**Key Capabilities:**")
+                    for cap in capabilities:
+                        st.markdown(f"- {cap}")
+
+                estimated_value = product.get('estimated_value_enabled', 'N/A')
+                st.markdown(f"**Estimated Value Enabled:** {estimated_value}")
+
+                why_recommended = product.get('why_recommended', '')
+                if why_recommended:
+                    st.markdown(f"**Why Recommended:** {why_recommended}")
+
+                st.markdown("---")
+
+            # Implementation approach
+            implementation_approach = docusign_product_summary.get('implementation_approach', '')
+            if implementation_approach:
+                st.markdown("### Implementation Approach")
+                st.markdown(implementation_approach)
+        else:
+            st.info("DocuSign product recommendations not available for this analysis.")
+
+
 def main():
     """Main application"""
 
     init_session_state()
 
-    # Initialize Google Sheets storage
+    # Initialize Supabase storage
     if 'storage' not in st.session_state:
-        st.session_state.storage = SheetsStorageManager()
+        st.session_state.storage = SupabaseStorageManager()
 
     # Header
     st.markdown('<h1 class="main-header">Agreement Map</h1>', unsafe_allow_html=True)
@@ -664,28 +1010,32 @@ def main():
                 st.caption(f"{len(saved_analyses)} saved analyses")
 
                 for analysis in saved_analyses[:10]:  # Show last 10
-                    col1, col2 = st.columns([4, 1])
+                    col1, col2, col3 = st.columns([8, 1, 1])
 
                     with col1:
-                        # Use Font Awesome icon instead of emoji
-                        button_label = f'{analysis["display_name"]}'
-                        if st.button(button_label, key=f"load_{analysis['row_index']}", use_container_width=True):
-                            loaded_data = st.session_state.storage.load_analysis(analysis['row_index'])
+                        # Display analysis name as plain text
+                        st.write(analysis["display_name"])
+
+                    with col2:
+                        # Load/open icon button
+                        if st.button("📂", key=f"load_{analysis['id']}", help="Load analysis"):
+                            loaded_data = st.session_state.storage.load_analysis(analysis['id'])
                             if loaded_data:
                                 st.session_state.analysis_result = loaded_data
                                 st.success(f"Loaded: {analysis['company_name']}")
                                 st.rerun()
 
-                    with col2:
-                        if st.button("Delete", key=f"del_{analysis['row_index']}"):
-                            if st.session_state.storage.delete_analysis(analysis['row_index']):
+                    with col3:
+                        # Trash icon delete button
+                        if st.button("🗑️", key=f"del_{analysis['id']}", help="Delete analysis"):
+                            if st.session_state.storage.delete_analysis(analysis['id']):
                                 st.success("Deleted!")
                                 st.rerun()
             else:
                 st.caption("No saved analyses yet")
         else:
-            st.caption("Google Sheets not configured")
-            st.caption("See setup instructions below")
+            st.caption("Supabase not configured")
+            st.caption("Add Supabase credentials to .streamlit/secrets.toml")
 
         st.markdown("---")
 
@@ -702,7 +1052,7 @@ def main():
         - Optimization opportunities
         - Interactive visualization
         - Web search via Tavily (optional)
-        - Save to Google Sheets (optional)
+        - Save to Supabase (optional)
         """)
 
         st.markdown("---")
@@ -816,20 +1166,20 @@ def main():
 
             st.session_state.analysis_result = result
 
-            # Auto-save to Google Sheets
+            # Auto-save to Supabase
             if st.session_state.storage.is_configured():
                 try:
                     if st.session_state.storage.save_analysis(company_name, result):
-                        st.markdown('<div class="success-box"><i class="fas fa-check-circle" style="color: rgb(255, 75, 75);"></i> Analysis complete and saved to Google Sheets!</div>', unsafe_allow_html=True)
+                        st.markdown('<div class="success-box"><i class="fas fa-check-circle" style="color: rgb(255, 75, 75);"></i> Analysis complete and saved to Supabase!</div>', unsafe_allow_html=True)
                     else:
                         st.markdown('<div class="success-box"><i class="fas fa-check-circle" style="color: rgb(255, 75, 75);"></i> Analysis complete!</div>', unsafe_allow_html=True)
-                        st.warning("Could not save to Google Sheets")
+                        st.warning("Could not save to Supabase")
                 except Exception as save_error:
                     st.markdown('<div class="success-box"><i class="fas fa-check-circle" style="color: rgb(255, 75, 75);"></i> Analysis complete!</div>', unsafe_allow_html=True)
-                    st.warning(f"Save to Google Sheets failed: {save_error}")
+                    st.warning(f"Save to Supabase failed: {save_error}")
             else:
                 st.markdown('<div class="success-box"><i class="fas fa-check-circle" style="color: rgb(255, 75, 75);"></i> Analysis complete!</div>', unsafe_allow_html=True)
-                st.info("Configure Google Sheets to save analyses")
+                st.info("Configure Supabase to save analyses")
 
         except Exception as e:
             st.error(f"Error during analysis: {str(e)}")
@@ -843,18 +1193,8 @@ def main():
 
         st.markdown("---")
 
-        # Header with export options
-        col1, col2 = st.columns([3, 1])
-
-        with col1:
-            st.markdown(f"## {company_analyzed}")
-
-        with col2:
-            export_option = st.selectbox(
-                "Export",
-                ["Download as...", "JSON", "PNG Image", "PowerPoint", "Word Doc"],
-                label_visibility="collapsed"
-            )
+        # Header
+        st.markdown(f"## {company_analyzed}")
 
         # Word Document Export Button (above Analysis Summary)
         st.markdown("""
@@ -884,7 +1224,8 @@ def main():
                     data=docx_bytes,
                     file_name=filename,
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True
+                    use_container_width=True,
+                    key="download_docx_main_top"
                 )
 
                 st.success("Word document created successfully!")
@@ -896,128 +1237,22 @@ def main():
         # Summary metrics
         display_analysis_summary(analysis)
 
-        # Export handling
-        if export_option == "JSON":
-            json_str = json.dumps(analysis, indent=2)
-            st.download_button(
-                label="Download JSON",
-                data=json_str,
-                file_name=f"{company_analyzed.replace(' ', '_').lower()}_analysis.json",
-                mime="application/json",
-                use_container_width=True
-            )
-
-        elif export_option == "PNG Image":
-            with st.spinner("Generating high-resolution image..."):
-                try:
-                    # Read visualization HTML
-                    viz_path = Path(__file__).parent / "visualization.html"
-
-                    if not viz_path.exists():
-                        st.error("Visualization file not found")
-                    else:
-                        with open(viz_path, 'r') as f:
-                            viz_html = f.read()
-
-                        # Inject analysis data
-                        data_injection = f"""
-                        <script>
-                            window.addEventListener('load', function() {{
-                                const data = {json.dumps(analysis)};
-                                renderVisualization(data);
-                            }});
-                        </script>
-                        """
-                        complete_html = viz_html.replace('</body>', f'{data_injection}</body>')
-
-                        # Capture as PNG
-                        export_manager = ExportManager()
-                        png_bytes = export_manager.capture_html_as_png(
-                            complete_html,
-                            width=2400,
-                            height=2400,
-                            scale=2
-                        )
-
-                        # Provide download button
-                        filename = f"{company_analyzed.replace(' ', '_').lower()}_visualization.png"
-
-                        st.download_button(
-                            label="Download PNG",
-                            data=png_bytes,
-                            file_name=filename,
-                            mime="image/png",
-                            use_container_width=True
-                        )
-
-                        st.success("PNG generated successfully!")
-
-                except Exception as e:
-                    st.error(f"Export failed: {str(e)}")
-                    st.exception(e)
-
-        elif export_option == "PowerPoint":
-            with st.spinner("Creating PowerPoint presentation..."):
-                try:
-                    # Create PowerPoint with native shapes (fast, no browser needed)
-                    export_manager = ExportManager()
-                    pptx_bytes = export_manager.create_pptx_native(
-                        company_analyzed,
-                        analysis
-                    )
-
-                    # Provide download button
-                    filename = f"{company_analyzed.replace(' ', '_').lower()}_presentation.pptx"
-
-                    st.download_button(
-                        label="Download PPTX",
-                        data=pptx_bytes,
-                        file_name=filename,
-                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                        use_container_width=True
-                    )
-
-                    st.success("PowerPoint created successfully! (Import to Google Slides)")
-
-                except Exception as e:
-                    st.error(f"Export failed: {str(e)}")
-                    st.exception(e)
-
-        elif export_option == "Word Doc":
-            with st.spinner("Creating Word document..."):
-                try:
-                    # Create Word document with slide content
-                    export_manager = ExportManager()
-                    docx_bytes = export_manager.create_docx_content(
-                        company_analyzed,
-                        analysis
-                    )
-
-                    # Provide download button
-                    filename = f"{company_analyzed.replace(' ', '_').lower()}_slide_content.docx"
-
-                    st.download_button(
-                        label="Download Word Doc",
-                        data=docx_bytes,
-                        file_name=filename,
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        use_container_width=True
-                    )
-
-                    st.success("Word document created successfully!")
-
-                except Exception as e:
-                    st.error(f"Export failed: {str(e)}")
-                    st.exception(e)
-
         st.markdown("---")
 
-        # Detailed sections
-        display_company_profile(analysis.get('company_profile', {}))
-        display_business_units(analysis.get('business_units', []))
-        display_agreement_landscape_by_function(analysis.get('agreement_landscape_by_function', {}))
-        display_opportunities(analysis.get('optimization_opportunities', []))
-        display_agreement_matrix(analysis.get('agreement_matrix', {}))
+        # Tab navigation: Main Analysis vs Background & Details
+        tab1, tab2 = st.tabs(["📊 Main Analysis (Copy/Paste Content)", "📋 Background & Details"])
+
+        with tab1:
+            # MAIN ANALYSIS TAB - Slide-based layout for easy copy/paste
+            display_main_analysis_slides(analysis)
+
+        with tab2:
+            # BACKGROUND & DETAILS TAB - Detailed information
+            display_company_profile(analysis.get('company_profile', {}))
+            display_business_units(analysis.get('business_units', []))
+            display_agreement_landscape_by_function(analysis.get('agreement_landscape_by_function', {}))
+            display_opportunities(analysis.get('optimization_opportunities', []))
+            display_agreement_matrix(analysis.get('agreement_matrix', {}))
 
 
 if __name__ == "__main__":

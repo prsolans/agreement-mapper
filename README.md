@@ -133,14 +133,20 @@ gcloud run deploy --source .
 agreement-map/
 ├── app.py                          # Main Streamlit application
 ├── research_agent.py               # Parallel OpenAI research engine
-├── storage_manager.py              # Local file storage manager (CRUD operations)
+├── supabase_storage.py             # Supabase database storage (CRUD operations)
+├── verification.py                 # Quote verification & confidence scoring
+├── export_manager.py               # Export to Word/PowerPoint/JSON
 ├── company-analysis-template.json  # Analysis template structure
-├── visualization.html              # Interactive visualization
-├── analyses/                       # Saved company analyses (auto-created)
-│   ├── salesforce_20251031_120000.json
-│   └── microsoft_20251031_130000.json
+├── docs/                           # Documentation
+│   ├── architecture/               # Technical setup guides
+│   ├── decisions/                  # Architecture Decision Records (ADRs)
+│   ├── guides/                     # User guides
+│   ├── roadmap/                    # Product roadmaps (date-stamped)
+│   └── archive/                    # Deprecated documentation
 ├── requirements.txt                # Python dependencies
 ├── .env.example                    # Environment variable template
+├── .streamlit/                     # Streamlit configuration
+│   └── secrets.toml.example        # Secrets configuration template
 ├── .gitignore                      # Git ignore rules
 └── README.md                       # This file
 ```

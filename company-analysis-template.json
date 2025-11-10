@@ -360,7 +360,64 @@
     "medium_priority_opportunities": 1,
     "low_priority_opportunities": 0
   },
-  
+
+  "executive_summary": {
+    "bullets": [
+      "$1.5B revenue company with 5,000 employees across 15 countries, operating in Technology/SaaS industry",
+      "Top strategic priorities: AI/ML product enhancement ($50M investment) and international expansion",
+      "3 optimization opportunities identified totaling $20.5M annual value with 891% ROI and 2-month payback",
+      "Agreement landscape spans 50,000+ contracts with heavy negotiation complexity in Enterprise Sales",
+      "Key pain points: 45-day contract cycle times, fragmented partner onboarding, manual renewal tracking"
+    ]
+  },
+
+  "discovery_questions": [
+    "Your 2024 annual report mentioned $50M investment in AI/ML product enhancement - how is your legal team supporting this initiative with partner agreements and data processing contracts?",
+    "With 50,000+ agreements across your organization, what systems are you currently using to manage contract lifecycle and how are they working for you?",
+    "You mentioned 45-day average contract cycle times in Enterprise Sales - what are the main bottlenecks causing delays?",
+    "How does your partner ecosystem team currently onboard new channel partners, and what challenges do they face?",
+    "As you expand internationally into new countries, what contract management challenges are you anticipating?",
+    "What's your current process for tracking and managing contract renewals across your business units?",
+    "Who in your organization is responsible for contract management strategy, and what are their top priorities for the next 12-18 months?"
+  ],
+
+  "docusign_product_summary": {
+    "products": [
+      {
+        "product_name": "DocuSign CLM",
+        "category": "Contract Lifecycle Management",
+        "use_cases_enabled": [
+          "Enterprise Contract Cycle Time Reduction",
+          "Partner Onboarding Automation"
+        ],
+        "key_capabilities_relevant": [
+          "Workflow automation and approval routing",
+          "Template library with playbooks",
+          "Integrated e-signature",
+          "Automated KYC/compliance checks"
+        ],
+        "estimated_value_enabled": "$20.5M total annual value",
+        "why_recommended": "Addresses core pain points of slow contract cycles and manual processes across both enterprise sales and partner ecosystem. Enables 66% cycle time reduction (45 days to 15 days) and 93% faster partner onboarding."
+      },
+      {
+        "product_name": "DocuSign eSignature",
+        "category": "Digital Signature",
+        "use_cases_enabled": [
+          "Enterprise Contract Cycle Time Reduction"
+        ],
+        "key_capabilities_relevant": [
+          "Digital signature for fast execution",
+          "Mobile signing support",
+          "Audit trail and compliance"
+        ],
+        "estimated_value_enabled": "$12M annual value",
+        "why_recommended": "Eliminates wet signature delays and enables remote/mobile signing for enterprise contracts, directly supporting revenue acceleration goals."
+      }
+    ],
+    "total_products_recommended": 2,
+    "implementation_approach": "Phased rollout: Start with CLM for Enterprise Sales (high priority, 6-9 months), then expand to Partner Ecosystem (medium priority, 4-6 months). Integrate eSignature throughout."
+  },
+
   "research_notes": {
     "key_findings": [
       "Company has grown through acquisition - disparate contract systems",
