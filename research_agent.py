@@ -24,6 +24,7 @@ class CompanyResearchAgent:
         self.model = "gpt-4-turbo-preview"
         self.tavily = TavilyClient(api_key=tavily_api_key) if tavily_api_key else None
         self.product_catalog = self._load_product_catalog()
+        self.research_cache = self._load_research_cache()
 
     def _load_product_catalog(self) -> Optional[Dict]:
         """
@@ -46,6 +47,66 @@ class CompanyResearchAgent:
         except Exception as e:
             # Silently fail - catalog is optional
             return None
+
+    def _load_research_cache(self) -> Dict:
+        """
+        Load research cache for industry benchmarks and company findings
+
+        Returns:
+            Cache dict or empty structure if not available
+        """
+        try:
+            cache_path = Path(__file__).parent / "data" / "research_cache.json"
+
+            if not cache_path.exists():
+                return {
+                    "industry_benchmarks": {},
+                    "company_findings": {},
+                    "software_stack_patterns": {}
+                }
+
+            with open(cache_path, 'r') as f:
+                cache = json.load(f)
+
+            return cache
+
+        except Exception as e:
+            # Silently fail - cache is optional
+            return {
+                "industry_benchmarks": {},
+                "company_findings": {},
+                "software_stack_patterns": {}
+            }
+
+    def _save_research_cache(self):
+        """Save research cache to disk"""
+        try:
+            cache_path = Path(__file__).parent / "data" / "research_cache.json"
+
+            with open(cache_path, 'w') as f:
+                json.dump(self.research_cache, f, indent=2)
+
+        except Exception as e:
+            # Silently fail - cache save is not critical
+            print(f"Warning: Could not save research cache: {e}")
+
+    def _is_cache_valid(self, cached_at: str, max_age_days: int) -> bool:
+        """
+        Check if cached data is still valid
+
+        Args:
+            cached_at: ISO format date string
+            max_age_days: Maximum age in days
+
+        Returns:
+            True if cache is still valid
+        """
+        try:
+            cached_date = datetime.fromisoformat(cached_at.replace('Z', '+00:00'))
+            age_days = (datetime.now() - cached_date).days
+            return age_days < max_age_days
+        except:
+            return False
 
     def _search_web_raw(self, query: str, max_results: int = 5) -> List[Dict]:
         """
@@ -520,6 +581,360 @@ Return as valid JSON with structure:
 
         return result
 
+    def _parse_job_postings_for_stack(self, search_results: List[Dict]) -> List[Dict]:
+        """
+        Parse job postings to extract software stack mentions
+
+        Args:
+            search_results: Raw search results from Tavily
+
+        Returns:
+            List of systems found with sources
+        """
+        # Common business systems to look for
+        systems_keywords = {
+            "Salesforce": ["Salesforce", "SFDC", "Sales Cloud", "Service Cloud"],
+            "SAP": ["SAP", "S/4HANA", "SAP ERP"],
+            "Workday": ["Workday", "Workday HCM", "Workday Financial"],
+            "Oracle": ["Oracle", "Oracle ERP", "Oracle Cloud"],
+            "NetSuite": ["NetSuite", "Net Suite"],
+            "Coupa": ["Coupa"],
+            "Ariba": ["Ariba", "SAP Ariba"],
+            "ServiceNow": ["ServiceNow", "Service Now"],
+            "Microsoft Dynamics": ["Dynamics 365", "Dynamics CRM", "Microsoft Dynamics"],
+            "DocuSign": ["DocuSign"],
+            "Adobe Sign": ["Adobe Sign", "EchoSign"],
+            "Tableau": ["Tableau"],
+            "Power BI": ["Power BI", "PowerBI"],
+        }
+
+        systems_found = {}
+
+        for result in search_results:
+            content = result.get('content', '') + ' ' + result.get('title', '')
+            url = result.get('url', '')
+
+            for system_name, keywords in systems_keywords.items():
+                for keyword in keywords:
+                    if keyword.lower() in content.lower():
+                        if system_name not in systems_found:
+                            systems_found[system_name] = {
+                                "system": system_name,
+                                "category": self._categorize_system(system_name),
+                                "mentions": 0,
+                                "sources": [],
+                                "confidence": "high"
+                            }
+
+                        systems_found[system_name]["mentions"] += 1
+                        if url and url not in systems_found[system_name]["sources"]:
+                            systems_found[system_name]["sources"].append(url)
+
+        # Convert to list and add evidence snippets
+        result_list = []
+        for system_name, data in systems_found.items():
+            if data["mentions"] > 0:
+                data["evidence"] = f"Found in {data['mentions']} job posting(s)"
+                data["source"] = data["sources"][0] if data["sources"] else "Job postings"
+                result_list.append(data)
+
+        return result_list
+
+    def _categorize_system(self, system_name: str) -> str:
+        """Categorize a system by type"""
+        categories = {
+            "Salesforce": "CRM",
+            "Microsoft Dynamics": "CRM/ERP",
+            "SAP": "ERP",
+            "Oracle": "ERP",
+            "NetSuite": "ERP",
+            "Workday": "HCM",
+            "Coupa": "Procurement",
+            "Ariba": "Procurement",
+            "ServiceNow": "ITSM",
+            "DocuSign": "CLM/eSignature",
+            "Adobe Sign": "eSignature",
+            "Tableau": "Analytics",
+            "Power BI": "Analytics",
+        }
+        return categories.get(system_name, "Business Software")
+
+    async def deep_research_company(
+        self,
+        company_name: str,
+        company_profile: Dict,
+        business_units: List[Dict],
+        progress_callback: Optional[Callable] = None
+    ) -> Dict:
+        """
+        Perform deep research to discover:
+        - Strategic goals with executive quotes and sources
+        - Software stack via job postings
+        - Pain points from reviews and news
+        - Industry benchmarks (cached where possible)
+
+        Args:
+            company_name: Company name
+            company_profile: Company profile dict
+            business_units: List of business units
+            progress_callback: Progress callback function
+
+        Returns:
+            Dict with strategic_goals, software_stack, pain_points, industry_benchmarks
+        """
+        if not self.tavily:
+            # No Tavily = no deep research
+            return {
+                "strategic_goals": [],
+                "software_stack": [],
+                "pain_points": [],
+                "industry_benchmarks": {},
+                "cache_used": False
+            }
+
+        if progress_callback:
+            progress_callback("Deep Research - Initializing...")
+
+        industry = company_profile.get('industry', 'Unknown')
+        revenue = company_profile.get('scale', {}).get('annual_revenue', 'Unknown')
+
+        # Check cache for company-specific findings (expires after 7 days)
+        cache_key = company_name.lower().replace(' ', '_')
+        cached_findings = self.research_cache.get('company_findings', {}).get(cache_key, {})
+
+        if cached_findings and self._is_cache_valid(cached_findings.get('cached_at', ''), max_age_days=7):
+            if progress_callback:
+                progress_callback("Deep Research - Using cached findings")
+            return cached_findings.get('data', {})
+
+        deep_research_data = {
+            "strategic_goals": [],
+            "software_stack": [],
+            "pain_points": [],
+            "industry_benchmarks": {},
+            "cache_used": False
+        }
+
+        # === 1. SOFTWARE STACK FROM JOB POSTINGS ===
+        if progress_callback:
+            progress_callback("Deep Research - Analyzing job postings for software stack...")
+
+        job_queries = [
+            f"site:linkedin.com/jobs {company_name} Salesforce OR SAP OR Workday OR Oracle",
+            f"site:greenhouse.io OR site:lever.co {company_name} required skills CRM ERP",
+            f"{company_name} job posting software engineer required skills systems"
+        ]
+
+        all_job_results = []
+        for query in job_queries:
+            results = self._search_web_raw(query, max_results=3)
+            all_job_results.extend(results)
+
+        software_stack = self._parse_job_postings_for_stack(all_job_results)
+        deep_research_data["software_stack"] = software_stack
+
+        # === 2. STRATEGIC GOALS (additional targeted search beyond what strategic_priorities already found) ===
+        if progress_callback:
+            progress_callback("Deep Research - Searching for strategic context...")
+
+        strategic_queries = [
+            f"{company_name} strategic priorities 2024 2025 initiatives goals",
+            f"{company_name} digital transformation automation efficiency"
+        ]
+
+        strategic_results_text = ""
+        for query in strategic_queries:
+            results = self._search_web(query, max_results=3)
+            strategic_results_text += results + "\n\n"
+
+        # Parse strategic goals using GPT-4 (lightweight extraction, not full analysis like strategic_priorities)
+        strategic_prompt = f"""Based on these search results about {company_name}, extract any mentions of strategic goals, initiatives, or business priorities.
+
+SEARCH RESULTS:
+{strategic_results_text}
+
+Return as JSON:
+{{
+  "goals_found": [
+    {{
+      "goal": "Brief description of goal",
+      "source": "Source URL if available",
+      "confidence": "high/medium/low"
+    }}
+  ]
+}}
+
+If no clear goals found, return empty array."""
+
+        try:
+            strategic_response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a research analyst extracting strategic information."},
+                    {"role": "user", "content": strategic_prompt}
+                ],
+                temperature=0.3,
+                response_format={"type": "json_object"}
+            )
+
+            strategic_data = json.loads(strategic_response.choices[0].message.content)
+            deep_research_data["strategic_goals"] = strategic_data.get("goals_found", [])
+        except Exception as e:
+            print(f"Error extracting strategic goals: {e}")
+            deep_research_data["strategic_goals"] = []
+
+        # === 3. PAIN POINTS FROM REVIEWS AND NEWS ===
+        if progress_callback:
+            progress_callback("Deep Research - Identifying pain points...")
+
+        pain_queries = [
+            f"{company_name} contract management challenges issues",
+            f"{company_name} sales cycle procurement process pain points"
+        ]
+
+        pain_results_text = ""
+        for query in pain_queries:
+            results = self._search_web(query, max_results=2)
+            pain_results_text += results + "\n\n"
+
+        # Parse pain points using GPT-4
+        pain_prompt = f"""Based on these search results about {company_name}, identify any contract management or operational pain points.
+
+SEARCH RESULTS:
+{pain_results_text}
+
+Look for:
+- Contract cycle time issues
+- Manual processes
+- System integration gaps
+- Compliance challenges
+
+Return as JSON:
+{{
+  "pain_points": [
+    {{
+      "pain": "Brief description",
+      "source": "Source URL if available",
+      "confidence": "high/medium/low"
+    }}
+  ]
+}}
+
+If no clear pain points found, return empty array."""
+
+        try:
+            pain_response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a research analyst identifying business challenges."},
+                    {"role": "user", "content": pain_prompt}
+                ],
+                temperature=0.3,
+                response_format={"type": "json_object"}
+            )
+
+            pain_data = json.loads(pain_response.choices[0].message.content)
+            deep_research_data["pain_points"] = pain_data.get("pain_points", [])
+        except Exception as e:
+            print(f"Error extracting pain points: {e}")
+            deep_research_data["pain_points"] = []
+
+        # === 4. INDUSTRY BENCHMARKS (CACHED) ===
+        if progress_callback:
+            progress_callback("Deep Research - Applying industry benchmarks...")
+
+        # Create cache key for industry + revenue band
+        benchmark_key = f"{industry.lower().replace(' ', '_')}_{self._revenue_band(revenue)}"
+        cached_benchmarks = self.research_cache.get('industry_benchmarks', {}).get(benchmark_key, {})
+
+        if cached_benchmarks and self._is_cache_valid(cached_benchmarks.get('cached_at', ''), max_age_days=90):
+            deep_research_data["industry_benchmarks"] = cached_benchmarks.get('data', {})
+            deep_research_data["cache_used"] = True
+        else:
+            # Search for industry benchmarks
+            benchmark_query = f"{industry} companies typical sales cycle contract volume procurement benchmarks"
+            benchmark_results = self._search_web(benchmark_query, max_results=3)
+
+            benchmark_prompt = f"""Based on these search results, extract typical benchmarks for {industry} companies at {revenue} revenue scale.
+
+SEARCH RESULTS:
+{benchmark_results}
+
+Look for:
+- Typical sales cycle time
+- Contract volumes
+- Procurement contract counts
+- Agreement management metrics
+
+Return as JSON:
+{{
+  "sales_cycle_time": "12-18 days (or Unknown)",
+  "contract_volume": "8,000-12,000 (or Unknown)",
+  "source": "Source description",
+  "applies_to": "{industry} companies"
+}}"""
+
+            try:
+                benchmark_response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "You are a research analyst extracting industry benchmarks."},
+                        {"role": "user", "content": benchmark_prompt}
+                    ],
+                    temperature=0.3,
+                    response_format={"type": "json_object"}
+                )
+
+                benchmark_data = json.loads(benchmark_response.choices[0].message.content)
+                deep_research_data["industry_benchmarks"] = benchmark_data
+
+                # Cache the benchmarks
+                if 'industry_benchmarks' not in self.research_cache:
+                    self.research_cache['industry_benchmarks'] = {}
+
+                self.research_cache['industry_benchmarks'][benchmark_key] = {
+                    'data': benchmark_data,
+                    'cached_at': datetime.now().isoformat()
+                }
+                self._save_research_cache()
+
+            except Exception as e:
+                print(f"Error extracting industry benchmarks: {e}")
+                deep_research_data["industry_benchmarks"] = {}
+
+        # Cache the complete findings for this company
+        if 'company_findings' not in self.research_cache:
+            self.research_cache['company_findings'] = {}
+
+        self.research_cache['company_findings'][cache_key] = {
+            'data': deep_research_data,
+            'cached_at': datetime.now().isoformat()
+        }
+        self._save_research_cache()
+
+        if progress_callback:
+            progress_callback("[✓] Deep research complete")
+
+        return deep_research_data
+
+    def _revenue_band(self, revenue_str: str) -> str:
+        """Convert revenue string to band for caching"""
+        if 'billion' in revenue_str.lower() or 'B' in revenue_str:
+            return '1B_plus'
+        elif 'million' in revenue_str.lower() or 'M' in revenue_str:
+            try:
+                amount = float(''.join(c for c in revenue_str if c.isdigit() or c == '.'))
+                if amount >= 500:
+                    return '500M_1B'
+                elif amount >= 100:
+                    return '100M_500M'
+                else:
+                    return 'under_100M'
+            except:
+                return 'unknown'
+        else:
+            return 'unknown'
+
     async def research_optimization_opportunities(
         self,
         company_name: str,
@@ -527,6 +942,7 @@ Return as valid JSON with structure:
         business_units: List[Dict],
         landscape: Dict,
         strategic_priorities: List[Dict],
+        deep_research_context: Optional[Dict] = None,
         progress_callback: Optional[Callable] = None
     ) -> List[Dict]:
         """Identify 2-3 contract optimization opportunities tied to functions/systems and strategic priorities"""
@@ -576,6 +992,38 @@ DocuSign Product Catalog (for recommendation context):
 {json.dumps(product_summaries, indent=2)}
 """
 
+        # Build deep research context if available
+        deep_context = ""
+        if deep_research_context:
+            software_stack = deep_research_context.get('software_stack', [])
+            pain_points = deep_research_context.get('pain_points', [])
+            benchmarks = deep_research_context.get('industry_benchmarks', {})
+
+            if software_stack or pain_points or benchmarks:
+                deep_context = "\n\n=== DEEP RESEARCH FINDINGS ===\n"
+
+                if software_stack:
+                    deep_context += "\nSoftware Stack (discovered from job postings):\n"
+                    for system in software_stack:
+                        deep_context += f"- {system['system']} ({system['category']})\n"
+                        deep_context += f"  Source: {system['source']}\n"
+                        deep_context += f"  Evidence: {system['evidence']}\n"
+
+                if pain_points:
+                    deep_context += "\nIdentified Pain Points:\n"
+                    for pain in pain_points:
+                        deep_context += f"- {pain['pain']}\n"
+                        if pain.get('source'):
+                            deep_context += f"  Source: {pain['source']}\n"
+
+                if benchmarks:
+                    deep_context += "\nIndustry Benchmarks:\n"
+                    for key, value in benchmarks.items():
+                        if key not in ['source', 'applies_to']:
+                            deep_context += f"- {key}: {value}\n"
+                    if benchmarks.get('source'):
+                        deep_context += f"  Source: {benchmarks['source']}\n"
+
         context = f"""
 Company: {company_name}
 Revenue: {company_profile.get('scale', {}).get('annual_revenue', 'Unknown')}
@@ -586,96 +1034,243 @@ Strategic Priorities (with Executive Quotes):
 
 Business Functions & Pain Points:
 {json.dumps(functions_summary, indent=2)}
+{deep_context}
 {product_context}
 """
 
-        prompt = f"""Based on this company context:
+        # Create few-shot examples to guide the AI
+        few_shot_examples = '''
+# EXAMPLE 1: Sales Contract Acceleration
+
+For a $5B software company with strategic priority to "accelerate revenue growth":
+
+{
+  "opportunity_id": "opp_001",
+  "title": "Sales Contract Cycle Time Reduction",
+  "use_case_name": "Accelerate Quote-to-Cash",
+  "description": "Automate MSA and order form generation to reduce sales cycle time by 75% and accelerate revenue recognition.",
+  "business_function": "Sales",
+  "agreement_types": ["Master Service Agreements", "Order Forms", "Statements of Work", "Non-Disclosure Agreements"],
+  "capabilities": "Enable sales reps to generate, negotiate, and execute customer agreements in days instead of weeks. Self-service contract generation from approved templates reduces legal review bottlenecks and provides real-time visibility into deal status.",
+  "systems_impacted": ["Salesforce CRM", "DocuSign CLM", "NetSuite ERP"],
+  "business_units_impacted": ["Enterprise Sales", "Mid-Market Sales", "Sales Operations"],
+  "strategic_alignment": ["Accelerate revenue growth by reducing sales cycle time", "Scale sales operations without proportional headcount growth"],
+  "executive_alignment": {
+    "priority_name": "Accelerate Revenue Growth",
+    "executive_champion": "Sarah Chen, Chief Revenue Officer",
+    "alignment_statement": "This directly addresses the CRO's mandate to shorten sales cycles and accelerate time-to-revenue. By automating contract generation and approval, sales reps spend less time on administrative tasks and more time selling.",
+    "supporting_quote": "We need to reduce friction in our quote-to-cash process to hit our $7B revenue target next year."
+  },
+  "current_state": {
+    "process_description": "Sales reps manually create contracts by copying from previous deals, then route through email for legal review. Average 15-20 days from quote to signed contract, with frequent errors requiring rework.",
+    "cycle_time": "15-20 days",
+    "pain_points": [
+      "Manual contract creation from scratch causes inconsistencies and errors",
+      "Email-based legal reviews create bottlenecks during quarter-end",
+      "No visibility into where contracts are stuck in approval process"
+    ]
+  },
+  "future_state": {
+    "process_description": "Sales reps generate contracts from approved templates in Salesforce, automatically routed through CLM for reviews based on deal size. Standard deals approved in hours, complex deals in 3-4 days.",
+    "target_cycle_time": "3-4 days",
+    "key_capabilities": ["Automated contract generation from templates", "Workflow-based approvals with escalation", "Real-time deal tracking in Salesforce"]
+  },
+  "risk_reduction": "Standardized contract language reduces negotiation risk and ensures compliance with corporate policies. Automated approval workflows prevent unauthorized discounting.",
+  "compliance_benefits": "Complete audit trail of all contract changes and approvals. Automated retention and searchability for regulatory inquiries.",
+  "value_quantification": {
+    "time_savings": "12 days per contract",
+    "agreements_affected": "~3,200 contracts annually",
+    "revenue_acceleration": "$15M from faster deal closure",
+    "cost_savings": "$450K in reduced legal review costs",
+    "total_annual_value": "$15.45M",
+    "implementation_cost": "$500K",
+    "roi_percentage": "2,990%",
+    "payback_period": "2-3 months"
+  },
+  "metrics": [
+    {"label": "faster contract cycle time", "value": "75%", "type": "efficiency"},
+    {"label": "ROI", "value": "2,990%", "type": "financial"},
+    {"label": "revenue acceleration", "value": "$15M", "type": "financial"}
+  ],
+  "implementation": {
+    "priority": "high",
+    "timeline": "4-6 months",
+    "complexity": "medium",
+    "dependencies": ["Salesforce integration", "Template library creation", "Approval workflow design"]
+  },
+  "recommended_docusign_products": [
+    {
+      "product_name": "DocuSign CLM",
+      "category": "CLM",
+      "why_recommended": "Provides contract authoring, workflow automation, and obligation tracking needed for sales contract lifecycle",
+      "key_capabilities_used": ["Contract authoring with clause library", "Workflow automation and approvals", "Salesforce integration"]
+    },
+    {
+      "product_name": "DocuSign Integration for Salesforce",
+      "category": "Integration",
+      "why_recommended": "Native Salesforce integration enables reps to generate and track contracts without leaving CRM",
+      "key_capabilities_used": ["Send for signature directly from Opportunity", "Real-time status tracking in Salesforce"]
+    }
+  ],
+  "sources": "Industry benchmark: 70-80% cycle time reduction typical for sales contract automation",
+  "confidence": "high"
+}
+
+# EXAMPLE 2: Vendor Contract Visibility
+
+For a manufacturing company with strategic priority to "optimize operational efficiency":
+
+{
+  "opportunity_id": "opp_002",
+  "title": "Vendor Contract Centralization & Auto-Renewal Prevention",
+  "use_case_name": "Eliminate Value Leakage from Missed Renewals",
+  "description": "Consolidate scattered vendor contracts into centralized repository with automated renewal tracking to prevent unfavorable auto-renewals and reduce supplier costs by 10-15%.",
+  "business_function": "Procurement",
+  "agreement_types": ["Vendor Master Agreements", "Purchase Orders", "SaaS Subscriptions", "Equipment Leases", "Maintenance Contracts"],
+  "capabilities": "Provide procurement team with complete visibility into all vendor commitments, renewal dates, and pricing terms. AI-powered extraction identifies opportunities to renegotiate or exit unfavorable contracts 90 days before auto-renewal.",
+  "systems_impacted": ["Coupa Procurement", "DocuSign Navigator", "SAP ERP"],
+  "business_units_impacted": ["Global Procurement", "IT", "Facilities", "Manufacturing Operations"],
+  "strategic_alignment": ["Reduce operational costs through better vendor management", "Improve compliance with procurement policies"],
+  "executive_alignment": {
+    "priority_name": "Optimize Operational Efficiency",
+    "executive_champion": "David Kumar, Chief Procurement Officer",
+    "alignment_statement": "This directly supports the CPO's initiative to reduce vendor spend by improving visibility into contract commitments. Preventing just 5 unfavorable auto-renewals would save $2-3M annually.",
+    "supporting_quote": "We're leaving millions on the table because we don't know what contracts we have or when they renew."
+  },
+  "current_state": {
+    "process_description": "Vendor contracts stored across email, SharePoint, and individual file systems. No centralized tracking of renewal dates. Procurement discovers auto-renewals after they occur, missing renegotiation opportunities.",
+    "cycle_time": "N/A - reactive discovery of renewals",
+    "pain_points": [
+      "Estimated 40% of vendor contracts have unknown renewal dates",
+      "Auto-renewals at 3-5% annual increases without negotiation",
+      "Cannot quickly answer 'What do we pay Vendor X?' across all agreements"
+    ]
+  },
+  "future_state": {
+    "process_description": "All vendor contracts ingested into Navigator with AI-extracted metadata. Automated alerts 90 days before renewal enable proactive renegotiation. Dashboard shows total spend by vendor across all contracts.",
+    "target_cycle_time": "90 days proactive notification",
+    "key_capabilities": ["AI metadata extraction from legacy contracts", "Automated renewal notifications", "Vendor spend analytics dashboard"]
+  },
+  "risk_reduction": "Reduce risk of unexpected budget overruns from forgotten renewals. Improved compliance with approved vendor lists and pricing terms.",
+  "compliance_benefits": "Centralized repository ensures all vendor contracts accessible for audits. Obligation tracking ensures compliance with contractual commitments.",
+  "value_quantification": {
+    "time_savings": "20 hours per week in contract search time",
+    "agreements_affected": "~800 vendor contracts",
+    "revenue_acceleration": "N/A",
+    "cost_savings": "$2.4M from prevented auto-renewals and renegotiation",
+    "total_annual_value": "$2.4M",
+    "implementation_cost": "$300K",
+    "roi_percentage": "700%",
+    "payback_period": "2 months"
+  },
+  "metrics": [
+    {"label": "cost avoidance", "value": "$2.4M", "type": "financial"},
+    {"label": "ROI", "value": "700%", "type": "financial"},
+    {"label": "contract visibility", "value": "100%", "type": "efficiency"}
+  ],
+  "implementation": {
+    "priority": "high",
+    "timeline": "3-4 months",
+    "complexity": "medium",
+    "dependencies": ["Historical contract ingestion", "AI training for metadata extraction", "Integration with procurement systems"]
+  },
+  "recommended_docusign_products": [
+    {
+      "product_name": "DocuSign Navigator",
+      "category": "Agreement Storage and Analysis",
+      "why_recommended": "Centralized repository with AI search and renewal tracking perfectly addresses the vendor contract visibility gap",
+      "key_capabilities_used": ["AI-powered contract search", "Custom data extractions", "Obligation and commitment tracking"]
+    },
+    {
+      "product_name": "DocuSign IAM",
+      "category": "Intelligent Agreement Management",
+      "why_recommended": "AI-powered contract analysis accelerates extraction of renewal dates and pricing terms from legacy contracts",
+      "key_capabilities_used": ["AI-powered contract analysis", "Automated metadata extraction", "Risk and obligation identification"]
+    }
+  ],
+  "sources": "Industry benchmark: Companies typically achieve 10-15% vendor cost reduction from improved contract visibility",
+  "confidence": "high"
+}
+
+---
+
+Now, apply this same thinking to the company below. Generate EXACTLY 3 opportunities following the pattern above.
+'''
+
+        prompt = f"""{few_shot_examples}
+
+# YOUR TASK: Analyze this company and generate 3 similar opportunities
+
 {context}
 
-Identify EXACTLY 3 high-value contract/agreement optimization opportunities.
-
-{"PRODUCT CONTEXT: Use the DocuSign Product Catalog above to recommend specific products that address each opportunity." if self.product_catalog else ""}
+{"PRODUCT CATALOG: When recommending DocuSign products, reference the catalog above and explain why each product fits the opportunity." if self.product_catalog else ""}
 
 CRITICAL REQUIREMENTS:
 1. Each opportunity MUST directly support one of the Strategic Priorities listed above
 2. Each opportunity MUST reference specific executive quotes from the priorities (if available)
 3. Map each opportunity to the executive who would champion it
+4. Follow the EXACT same JSON structure as the examples above
+5. Be specific to THIS company's industry, scale, and priorities - don't just copy the examples
 
-Each opportunity should be tied to specific business functions, systems, and agreement types.
+Follow the EXACT same JSON structure as the examples above. Each opportunity must include all fields shown in the examples:
+- opportunity_id, title, use_case_name, description
+- business_function, agreement_types, capabilities
+- systems_impacted, business_units_impacted
+- strategic_alignment, executive_alignment (with priority_name, executive_champion, alignment_statement, supporting_quote)
+- current_state (process_description, cycle_time, pain_points)
+- future_state (process_description, target_cycle_time, key_capabilities)
+- risk_reduction, compliance_benefits
+- value_quantification (time_savings, agreements_affected, revenue_acceleration, cost_savings, total_annual_value, implementation_cost, roi_percentage, payback_period)
+- metrics (2-4 metrics mixing financial and efficiency)
+- implementation (priority, timeline, complexity, dependencies)
+{f'''- recommended_docusign_products (1-3 products with product_name, category, why_recommended, key_capabilities_used)''' if self.product_catalog else ''}
+- sources, confidence
 
-For each opportunity, provide in JSON format:
-- opportunity_id: Unique ID (e.g., "opp_001")
-- title: Concise title (e.g., "Sales Contract Cycle Time Reduction")
-- use_case_name: Clear use case name for presentation (e.g., "Maximize Value Negotiated", "Accelerate Contract Onboarding")
-- description: One sentence description
-- business_function: Primary business function that benefits (e.g., "Sales", "Procurement")
-- agreement_types: Array of specific agreement types affected (e.g., ["SaaS Subscription", "MSAs", "Payment Processing", "Order Forms", "Hardware Purchasing"])
-- capabilities: 2-3 sentence description of what this opportunity enables
-- systems_impacted: Array of systems that need changes (e.g., ["Salesforce", "DocuSign"])
-- business_units_impacted: Array of business unit IDs that benefit
-- strategic_alignment: Array of 2 strategic benefits
-- executive_alignment: How this opportunity maps to executive statements:
-  - priority_name: Which strategic priority this supports
-  - executive_champion: Name and title of executive who would champion this (from priorities)
-  - alignment_statement: 2-3 sentence explanation of how this addresses the executive's stated priority
-  - supporting_quote: Direct executive quote from priorities that this opportunity addresses (if available)
-- current_state:
-  - process_description: Current process (2-3 sentences)
-  - cycle_time: Current timeframe
-  - pain_points: Array of 3 specific problems
-- future_state:
-  - process_description: Improved process
-  - target_cycle_time: Target timeframe
-  - key_capabilities: Array of 3 required capabilities/tools
-- risk_reduction: Describe how this reduces risk for the specific agreement types (e.g., "10% reduced value leakage", "Improved obligation tracking")
-- compliance_benefits: Describe compliance improvements by agreement type (e.g., "Enhanced audit trail for regulatory compliance", "Automated renewals reduce expiration risk")
-- value_quantification:
-  - time_savings: Time saved per transaction
-  - agreements_affected: Annual volume
-  - revenue_acceleration: Revenue impact (if applicable)
-  - cost_savings: Cost reduction
-  - total_annual_value: Combined annual value
-  - implementation_cost: Estimated cost
-  - roi_percentage: ROI as percentage
-  - payback_period: Payback timeframe
-- metrics: Array of 2-4 mixed metrics for presentation (combine financial and efficiency):
-  - Each metric: {{"label": "reduced value leakage", "value": "10%", "type": "financial"}} or {{"label": "faster cycle time", "value": "71-95%", "type": "efficiency"}}
-  - Include at least 1 financial (ROI, cost reduction, revenue) and 1 efficiency (cycle time, speed, volume) metric
-  - Examples: "reduced value leakage: 10%", "improved conversion: 8-20%", "faster cycle time: 71-95%", "cost savings: $450K"
-- implementation:
-  - priority: high/medium/low
-  - timeline: Implementation duration
-  - complexity: high/medium/low
-  - dependencies: Array of prerequisites
-{f'''- recommended_docusign_products: Array of 1-3 DocuSign products that address this opportunity:
-  - product_name: Name from catalog
-  - category: Category from catalog
-  - why_recommended: 1-2 sentence explanation of fit
-  - key_capabilities_used: Array of 2-3 capabilities from the product that apply''' if self.product_catalog else ''}
-- sources: Data sources
-- confidence: high/medium/low
+KEY DIFFERENCES FROM EXAMPLES:
+- Tailor opportunities to THIS company's specific industry, scale, pain points, and strategic priorities
+- Use the company's actual business functions and systems from the context above
+- Reference the specific executive quotes and priorities provided
+- Recommend DocuSign products that logically fit this company's needs
 
-Focus on opportunities that address the pain points identified in the business functions above.
-
-IMPORTANT: You MUST return EXACTLY 3 opportunities in your response.
-
-Return as valid JSON with this exact structure:
+Return as valid JSON:
 {{
   "opportunities": [
-    {{ /* opportunity 1 with all fields above */ }},
-    {{ /* opportunity 2 with all fields above */ }},
-    {{ /* opportunity 3 with all fields above */ }}
+    {{ /* opportunity 1 */ }},
+    {{ /* opportunity 2 */ }},
+    {{ /* opportunity 3 */ }}
   ]
 }}
 """
 
+        system_message = """You are a DocuSign CLM specialist and business value consultant. Your expertise includes:
+
+1. CONTRACT LIFECYCLE MANAGEMENT: Deep knowledge of how enterprises manage agreements across sales, procurement, legal, HR, and operations
+2. PROCESS OPTIMIZATION: Identifying high-ROI opportunities to automate contract workflows and reduce cycle times
+3. EXECUTIVE ALIGNMENT: Connecting operational improvements to strategic business priorities and executive mandates
+4. VALUE QUANTIFICATION: Using industry benchmarks to estimate realistic ROI, cost savings, and efficiency gains
+
+METHODOLOGY:
+- Start with the company's strategic priorities and executive statements
+- Identify specific process bottlenecks causing measurable business pain
+- Recommend DocuSign solutions that directly address those pain points
+- Quantify value using conservative industry benchmarks (cite sources)
+- Ensure each opportunity has a clear executive champion
+
+QUALITY STANDARDS:
+- Be specific: "15-day sales cycle" not "slow process"
+- Be realistic: Use industry benchmark ranges, not aspirational best-case
+- Be relevant: Tailor to company's industry, scale, and actual pain points
+- Be actionable: Include implementation timeline and dependencies
+
+Always return EXACTLY 3 opportunities in valid JSON format."""
+
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {"role": "system", "content": "You are a business process consultant specializing in contract lifecycle optimization. Provide realistic value estimates based on industry benchmarks. Always return EXACTLY 3 opportunities."},
+                {"role": "system", "content": system_message},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.5,
+            temperature=0.4,
             max_tokens=4096,
             response_format={"type": "json_object"}
         )
@@ -835,13 +1430,22 @@ Return as valid JSON with structure:
             matrix_task
         )
 
-        # Phase 3: Run optimization opportunities (needs priorities and landscape)
+        # Phase 2.5: Run deep research (needs profile and business_units)
+        deep_research_findings = await self.deep_research_company(
+            company_name,
+            profile,
+            business_units,
+            callbacks.get('deep_research')
+        )
+
+        # Phase 3: Run optimization opportunities (needs priorities, landscape, and deep research)
         opportunities = await self.research_optimization_opportunities(
             company_name,
             profile,
             business_units,
             landscape,
             strategic_priorities,
+            deep_research_findings,
             callbacks.get('opportunities')
         )
 
@@ -873,6 +1477,7 @@ Return as valid JSON with structure:
             "agreement_landscape_by_function": landscape,
             "optimization_opportunities": opportunities,
             "agreement_matrix": agreement_matrix,
+            "deep_research_findings": deep_research_findings,
             "portfolio_summary": portfolio_summary,
             "research_notes": {
                 "key_findings": [
@@ -1084,36 +1689,96 @@ Key Pain Points:
 {chr(10).join([f"- {opp.get('title', 'Unknown')}" for opp in opportunities[:3]])}
 """
 
-        prompt = f"""Based on this company analysis, create a concise executive summary with 3-5 bullet points.
+        # Few-shot examples for better executive summaries
+        examples = '''
+# EXAMPLE 1: Software Company
+
+CONTEXT: $5.2B SaaS company, 12,000 employees, 40 countries. Strategic priority: "Accelerate revenue growth to $7B". Opportunities: $15.4M value, 2,990% ROI, 2-3 month payback. Agreements: ~18,000 contracts. Pain: 15-day sales cycle, missed renewals, scattered contracts.
+
+GOOD SUMMARY:
+- "Enterprise SaaS leader with $5.2B revenue across 40 countries, targeting $7B by accelerating quote-to-cash and scaling operations efficiently"
+- "Opportunity portfolio delivers $15.4M in annual value (2,990% ROI, 2-3 month payback) by addressing sales contract delays, vendor spend leakage, and legal capacity constraints"
+- "Managing ~18,000 agreements across sales, procurement, and HR with limited visibility: 15-day sales cycles create revenue delays, while missed vendor renewals leak $2-3M annually"
+
+BAD SUMMARY (too generic, checkbox-style):
+- "Large software company with $5.2B in revenue and 12,000 employees operating in 40 countries"
+- "Has strategic priority to accelerate revenue growth to $7B"
+- "Identified 3 opportunities with $15.4M annual value and 2,990% ROI"
+- "Manages approximately 18,000 agreements"
+
+# EXAMPLE 2: Manufacturing Company
+
+CONTEXT: $12B industrial manufacturer, 35,000 employees, 15 countries. Strategic priority: "Optimize operational efficiency". Opportunities: $8.2M value, 1,250% ROI, 3 months payback. Agreements: ~25,000 contracts. Pain: Procurement contract chaos, compliance risk, supplier cost overruns.
+
+GOOD SUMMARY:
+- "$12B global manufacturer with 35,000 employees seeking operational efficiency gains to fund growth initiatives and improve margins"
+- "Contract optimization portfolio worth $8.2M annually (1,250% ROI, 3-month payback) focuses on procurement spend management, compliance risk reduction, and supplier relationship optimization"
+- "Fragmented agreement landscape of ~25,000 contracts creates procurement blind spots: 40% of vendor contracts have unknown renewal dates, causing $3-5M in preventable auto-renewal cost overruns"
+
+---
+'''
+
+        prompt = f"""{examples}
+
+# YOUR TASK: Create an executive summary for this company
 
 {context}
 
-Generate 3-5 bullet points that capture:
-1. Company scale and industry (revenue, employees, geographic reach)
-2. Top 1-2 strategic priorities with investment levels if available
-3. Total opportunity value, ROI, and payback period
-4. Agreement landscape scope and complexity
-5. Top 2-3 pain points or challenges
+Generate 3-5 compelling bullet points following these guidelines:
 
-Format: Return ONLY a JSON object with this structure:
+**STRUCTURE (follow the examples above):**
+1. **Company Context + Strategic Direction**: Scale (revenue, employees, geography) + top strategic priority
+2. **Opportunity Value Proposition**: Total value, ROI, payback + what opportunities address (pain points)
+3. **Agreement Landscape + Key Challenges**: Contract volume + specific pain points with business impact
+
+**VOICE & TONE:**
+- Professional but engaging (not boring checkbox bullets)
+- Lead with business outcomes, not just facts
+- Connect challenges to strategic priorities
+- Use specific numbers and metrics (avoid vague "large" or "many")
+- Show cause-and-effect: "X creates Y" not just "has X and Y"
+
+**WHAT TO AVOID:**
+- Generic descriptions ("large company", "many employees")
+- Listing facts without connecting them ("has X. has Y. has Z.")
+- Vague language ("significant opportunities", "various challenges")
+- Checkbox-style bullets that just restate data points
+
+Return as JSON:
 {{
   "bullets": [
-    "First bullet point",
-    "Second bullet point",
-    ...
+    "Compelling bullet 1...",
+    "Compelling bullet 2...",
+    "Compelling bullet 3..."
   ]
 }}
 
-Keep each bullet to 1-2 sentences maximum. Be specific with numbers and metrics."""
+Each bullet should be 1-2 sentences that tell a story, not just list facts."""
 
         try:
+            system_message = """You are a senior business strategist who crafts compelling executive summaries for C-suite audiences.
+
+Your summaries:
+- Lead with strategic context and business outcomes, not just facts
+- Connect challenges to opportunities to create a narrative arc
+- Use specific metrics to build credibility (avoid vague language)
+- Show cause-and-effect relationships ("X creates Y" not "has X and Y")
+- Balance professional rigor with engaging storytelling
+
+Your audience is busy executives who need to:
+1. Quickly understand the company's strategic direction
+2. Assess the business case for investment (ROI, payback, value)
+3. See how contract management challenges impact strategic goals
+
+Write in an active, confident voice. Avoid checkbox-style bullets that just list information. Instead, craft narrative bullets that connect the dots between scale, strategy, challenges, and opportunities."""
+
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are an expert business analyst creating executive summaries."},
+                    {"role": "system", "content": system_message},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.7
+                temperature=0.5
             )
 
             content = response.choices[0].message.content.strip()
@@ -1172,35 +1837,105 @@ Business Units:
 Agreement Volume: {landscape_summary.get('total_estimated_agreements', 'Unknown')}
 """
 
-        prompt = f"""Based on this company analysis, generate 5-7 discovery questions that a salesperson should ask to validate these findings and uncover additional needs.
+        # Build MEDDPICC-aligned prompt with examples
+        meddpicc_examples = '''
+# MEDDPICC Discovery Framework Examples
+
+For a $5B software company with strategic priority "accelerate revenue growth" and pain point "15-day sales cycle":
+
+**METRICS (Quantify Business Impact)**
+- "You mentioned accelerating revenue growth as a priority. What's the financial impact of reducing your sales contract cycle time from 15 days to 3-4 days? How many deals would that help close each quarter?"
+
+**ECONOMIC BUYER (Budget Authority)**
+- "Who owns the budget for contract management and legal operations initiatives? Are they involved in evaluating solutions that impact quote-to-cash speed?"
+
+**DECISION CRITERIA (Evaluation Priorities)**
+- "When you evaluate solutions to accelerate sales contracts, what matters most: cycle time reduction, integration with Salesforce, legal team capacity, or something else?"
+
+**DECISION PROCESS (Approval Workflow)**
+- "Walk me through how you typically evaluate and approve a contract management solution. Who needs to be involved, and what's the typical timeline?"
+
+**PAPER PROCESS (Legal/Procurement)**
+- "What does your internal procurement process look like for software purchases in this price range? Any compliance or security requirements we should be aware of?"
+
+**IDENTIFY PAIN (Current Challenges)**
+- "You mentioned email-based legal reviews create bottlenecks. Can you describe what happens during quarter-end? How many contracts are stuck in review right now?"
+
+**CHAMPION (Internal Advocate)**
+- "Who internally is most frustrated by the current contract process? Who would be the biggest advocate for changing how sales contracts are managed?"
+
+**COMPETITION (Alternatives)**
+- "Are you currently evaluating any other contract management solutions? What's driving you to look at options now versus six months ago?"
+
+---
+'''
+
+        prompt = f"""{meddpicc_examples}
+
+# YOUR TASK: Generate MEDDPICC-aligned discovery questions for this company
 
 {context}
 
-Generate questions that:
-1. Reference specific findings from the analysis (strategic priorities, pain points, etc.)
-2. Are open-ended to encourage discussion
-3. Validate assumptions made in the analysis
-4. Uncover decision-makers and buying process
-5. Explore current systems and processes
-6. Identify additional pain points or opportunities
+Generate 7-9 discovery questions following the MEDDPICC framework:
 
-Format: Return ONLY a JSON array of question strings:
+1. **METRICS**: Questions about quantifiable business impact (revenue, cost, time savings)
+2. **ECONOMIC BUYER**: Questions about budget owners and financial decision-makers
+3. **DECISION CRITERIA**: Questions about evaluation priorities and success criteria
+4. **DECISION PROCESS**: Questions about approval workflow and timeline
+5. **PAPER PROCESS**: Questions about procurement, legal, and contracting requirements
+6. **IDENTIFY PAIN**: Questions that probe current challenges and pain points
+7. **CHAMPION**: Questions about internal advocates and stakeholders
+8. **COMPETITION**: Questions about alternatives and urgency drivers
+
+Each question should:
+- Reference specific findings from the analysis (strategic priorities, pain points, business units)
+- Be open-ended to encourage detailed responses
+- Be conversational and consultative in tone
+- Be 1-2 sentences maximum
+
+CRITICAL: Include at least ONE question for EACH of the 8 MEDDPICC elements. Aim for 7-9 questions total.
+
+Return as JSON array:
 [
-  "Question 1...",
-  "Question 2...",
-  ...
-]
-
-Each question should be 1-2 sentences maximum."""
+  "Metrics question referencing specific finding...",
+  "Economic Buyer question...",
+  "Decision Criteria question...",
+  "Decision Process question...",
+  "Paper Process question...",
+  "Identify Pain question...",
+  "Champion question...",
+  "Competition question...",
+  "Optional 9th question..."
+]"""
 
         try:
+            system_message = """You are a DocuSign sales specialist trained in MEDDPICC methodology.
+
+Your discovery questions help sales reps:
+1. Qualify opportunities by uncovering key stakeholders, budget, and decision process
+2. Build business cases by quantifying pain points and value
+3. Navigate complex enterprise sales cycles by understanding evaluation criteria
+4. Position DocuSign CLM solutions effectively
+
+MEDDPICC Framework:
+- METRICS: Quantify the cost of current problems and value of solving them
+- ECONOMIC BUYER: Identify who controls the budget for this initiative
+- DECISION CRITERIA: Understand what matters most in evaluation
+- DECISION PROCESS: Map out the approval workflow and timeline
+- PAPER PROCESS: Understand procurement, legal, security requirements
+- IDENTIFY PAIN: Probe deeply into current challenges and their business impact
+- CHAMPION: Find internal advocates who will sell for you
+- COMPETITION: Understand alternatives, incumbents, and urgency drivers
+
+Your questions should be consultative, not interrogative. Reference specific findings from the analysis to show you've done your homework."""
+
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are an expert sales consultant creating discovery questions."},
+                    {"role": "system", "content": system_message},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.7
+                temperature=0.6
             )
 
             content = response.choices[0].message.content.strip()
@@ -1217,13 +1952,16 @@ Each question should be 1-2 sentences maximum."""
 
         except Exception as e:
             print(f"Error generating discovery questions: {e}")
-            # Return fallback questions
+            # Return fallback MEDDPICC questions
             return [
-                f"What systems are you currently using to manage your agreement lifecycle across {len(business_units)} business units?",
-                "What are the biggest challenges your team faces with contract management today?",
-                "Who in your organization is responsible for contract management strategy?",
-                "How do you currently track contract renewals and compliance obligations?",
-                "What would be the impact of reducing contract cycle times by 50%?"
+                f"What's the business impact of your current contract management process? For example, how much revenue is delayed by slow contract cycles, or what does manual work cost annually?",  # METRICS
+                "Who owns the budget for legal operations, contract management, or sales enablement initiatives? Is there allocated budget for improvements this year?",  # ECONOMIC BUYER
+                "When evaluating contract management solutions, what matters most to your team: cycle time, cost savings, risk reduction, or something else?",  # DECISION CRITERIA
+                "Walk me through how your organization typically evaluates and approves enterprise software. Who needs to be involved, and what's the timeline?",  # DECISION PROCESS
+                "What does your procurement process look like for software in the $100K-$500K range? Any security, compliance, or legal requirements we should know about?",  # PAPER PROCESS
+                f"Can you describe your most painful contract management scenario? For example, what happens during quarter-end, or when a key contract is about to renew?",  # IDENTIFY PAIN
+                "Who in your organization is most frustrated by the current contract process? Who would be the biggest advocate for improving how agreements are managed?",  # CHAMPION
+                "Are you currently looking at other contract management solutions? What's driving you to explore options now?",  # COMPETITION
             ]
 
     def aggregate_product_recommendations(self, analysis_data: Dict) -> Dict:

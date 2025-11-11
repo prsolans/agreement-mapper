@@ -1,0 +1,123 @@
+{
+  "_metadata": {
+    "version": "1.0",
+    "created_at": "2024-11-10",
+    "description": "Cache for deep research findings to reduce API costs"
+  },
+  "industry_benchmarks": {
+    "restaurants_1B_plus": {
+      "data": {
+        "sales_cycle_time": "Unknown",
+        "contract_volume": "Unknown",
+        "source": "The provided sources do not contain specific information regarding typical sales cycle time, contract volumes, procurement contract counts, or agreement management metrics for restaurants companies at the $1 billion revenue scale.",
+        "applies_to": "Restaurants companies"
+      },
+      "cached_at": "2025-11-10T14:19:48.566330"
+    }
+  },
+  "company_findings": {
+    "cava": {
+      "data": {
+        "strategic_goals": [
+          {
+            "goal": "Expand to surpass 1,000 units by 2032",
+            "source": "https://finance.yahoo.com/news/cavas-openings-hit-3m-auv-160300609.html",
+            "confidence": "high"
+          },
+          {
+            "goal": "Establish Mediterranean as the next major cultural cuisine category",
+            "source": "https://investor.cava.com/news/news-details/2025/CAVA-Group-Reports-Fourth-Quarter-and-Full-Year-Fiscal-2024-Results/default.aspx",
+            "confidence": "high"
+          },
+          {
+            "goal": "Continue to grow market share and establish category-defining leadership position",
+            "source": "https://investor.cava.com/news/news-details/2025/CAVA-Group-Reports-Second-Quarter-2025-Results/default.aspx",
+            "confidence": "high"
+          },
+          {
+            "goal": "Leverage technology to drive growth, enhance profitability, and improve customer experience",
+            "source": "https://www.alphasumer.com/post/how-cava-is-leveraging-technology-to-drive-growth",
+            "confidence": "high"
+          },
+          {
+            "goal": "Invest in automation to boost labor efficiency and enhance customer experience",
+            "source": "https://www.emarketer.com/content/cava-invests-in-kitchen-robotics-to-boost-efficiency-and-customer-experience",
+            "confidence": "high"
+          },
+          {
+            "goal": "Use technology to free up labor for higher-value tasks and improve operational efficiency",
+            "source": "https://www.customerexperiencedive.com/news/cava-tech-workers-connect-with-guests/757622/",
+            "confidence": "high"
+          }
+        ],
+        "software_stack": [
+          {
+            "system": "Salesforce",
+            "category": "CRM",
+            "mentions": 2,
+            "sources": [
+              "https://www.linkedin.com/jobs/view/sap-crm-to-salesforce-sap-s-4-integration-consultant-at-jobs-via-dice-4319365680",
+              "https://www.linkedin.com/jobs/view/senior-specialist-enterprise-learning-integration-excellence-at-salesforce-4334301563"
+            ],
+            "confidence": "high",
+            "evidence": "Found in 2 job posting(s)",
+            "source": "https://www.linkedin.com/jobs/view/sap-crm-to-salesforce-sap-s-4-integration-consultant-at-jobs-via-dice-4319365680"
+          },
+          {
+            "system": "SAP",
+            "category": "ERP",
+            "mentions": 1,
+            "sources": [
+              "https://www.linkedin.com/jobs/view/sap-crm-to-salesforce-sap-s-4-integration-consultant-at-jobs-via-dice-4319365680"
+            ],
+            "confidence": "high",
+            "evidence": "Found in 1 job posting(s)",
+            "source": "https://www.linkedin.com/jobs/view/sap-crm-to-salesforce-sap-s-4-integration-consultant-at-jobs-via-dice-4319365680"
+          },
+          {
+            "system": "Oracle",
+            "category": "ERP",
+            "mentions": 1,
+            "sources": [
+              "https://www.linkedin.com/jobs/view/integration-project-manager-at-executiveplacements-com-4317080238"
+            ],
+            "confidence": "high",
+            "evidence": "Found in 1 job posting(s)",
+            "source": "https://www.linkedin.com/jobs/view/integration-project-manager-at-executiveplacements-com-4317080238"
+          }
+        ],
+        "pain_points": [
+          {
+            "pain": "Limited contract visibility leading to reduced productivity due to context switching and difficulty in finding contracts when needed.",
+            "source": "https://www.icertis.com/research/blog/the-top-8-contract-management-challenges-and-how-to-overcome-them-with-contract-management-software/",
+            "confidence": "high"
+          },
+          {
+            "pain": "Lack of supplier performance information, unclear responsibilities in supplier disputes, and no tracking of spend versus time plan, indicating potential system integration gaps and manual process issues.",
+            "source": "https://sievo.com/blog/10-challenges-contract-management-is-facing-and-how-to-overcome-them",
+            "confidence": "high"
+          },
+          {
+            "pain": "High switching costs to different suppliers and the difficulty in finding alternatives for premium ingredients, suggesting potential contract cycle time issues and compliance challenges.",
+            "source": "https://trace.tennessee.edu/cgi/viewcontent.cgi?article=3639&context=utk_chanhonoproj",
+            "confidence": "medium"
+          },
+          {
+            "pain": "Balancing optimal inventory levels and minimizing waste, indicating potential manual processes and system integration gaps in inventory management.",
+            "source": "https://www.itilite.com/blog/pain-points-for-procurement-head/",
+            "confidence": "medium"
+          }
+        ],
+        "industry_benchmarks": {
+          "sales_cycle_time": "Unknown",
+          "contract_volume": "Unknown",
+          "source": "The provided sources do not contain specific information regarding typical sales cycle time, contract volumes, procurement contract counts, or agreement management metrics for restaurants companies at the $1 billion revenue scale.",
+          "applies_to": "Restaurants companies"
+        },
+        "cache_used": false
+      },
+      "cached_at": "2025-11-10T14:19:48.567585"
+    }
+  },
+  "software_stack_patterns": {}
+}

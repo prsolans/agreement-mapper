@@ -401,6 +401,96 @@ def display_agreement_landscape_by_function(landscape: dict):
             st.markdown("---")
 
 
+def display_deep_research_findings(deep_research: dict):
+    """Display deep research findings with sources"""
+
+    with st.expander("📊 Deep Research Findings", expanded=False):
+        if not deep_research or all(not v for k, v in deep_research.items() if k not in ['cache_used']):
+            st.info("No deep research findings available.")
+            return
+
+        # Software Stack
+        software_stack = deep_research.get('software_stack', [])
+        if software_stack:
+            st.markdown("### 💻 Software Stack Discovered")
+            st.markdown("*Discovered from job postings and public information*")
+            st.markdown("")
+
+            for system in software_stack:
+                col1, col2, col3 = st.columns([3, 2, 2])
+                with col1:
+                    st.markdown(f"**{system['system']}** ({system['category']})")
+                with col2:
+                    st.markdown(f"*{system['evidence']}*")
+                with col3:
+                    if system.get('source'):
+                        st.markdown(f"[Source]({system['source']})")
+
+            st.markdown("---")
+
+        # Strategic Goals
+        strategic_goals = deep_research.get('strategic_goals', [])
+        if strategic_goals:
+            st.markdown("### 🎯 Additional Strategic Context")
+            st.markdown("*Discovered from recent announcements and initiatives*")
+            st.markdown("")
+
+            for goal in strategic_goals:
+                confidence_icon = {
+                    'high': '✅',
+                    'medium': '⚠️',
+                    'low': '❓'
+                }.get(goal.get('confidence', 'low'), '❓')
+
+                st.markdown(f"{confidence_icon} **{goal.get('goal', 'N/A')}**")
+                if goal.get('source'):
+                    st.markdown(f"   *Source: {goal['source']}*")
+                st.markdown("")
+
+            st.markdown("---")
+
+        # Pain Points
+        pain_points = deep_research.get('pain_points', [])
+        if pain_points:
+            st.markdown("### ⚠️ Identified Pain Points")
+            st.markdown("*Discovered from research and industry analysis*")
+            st.markdown("")
+
+            for pain in pain_points:
+                confidence_icon = {
+                    'high': '✅',
+                    'medium': '⚠️',
+                    'low': '❓'
+                }.get(pain.get('confidence', 'low'), '❓')
+
+                st.markdown(f"{confidence_icon} {pain.get('pain', 'N/A')}")
+                if pain.get('source'):
+                    st.markdown(f"   *Source: {pain['source']}*")
+                st.markdown("")
+
+            st.markdown("---")
+
+        # Industry Benchmarks
+        benchmarks = deep_research.get('industry_benchmarks', {})
+        if benchmarks and any(k not in ['source', 'applies_to'] for k in benchmarks.keys()):
+            st.markdown("### 📈 Industry Benchmarks")
+            if benchmarks.get('applies_to'):
+                st.markdown(f"*{benchmarks['applies_to']}*")
+            st.markdown("")
+
+            for key, value in benchmarks.items():
+                if key not in ['source', 'applies_to']:
+                    formatted_key = key.replace('_', ' ').title()
+                    st.markdown(f"**{formatted_key}:** {value}")
+
+            if benchmarks.get('source'):
+                st.markdown(f"\n*Source: {benchmarks['source']}*")
+
+        # Cache indicator
+        if deep_research.get('cache_used'):
+            st.info("💾 Some data was loaded from cache to reduce research time and cost.")
+
+
 def display_opportunities(opportunities: list):
     """Display optimization opportunities"""
 
@@ -1003,34 +1093,71 @@ def main():
         # Saved Analyses Section
         st.markdown('### <i class="fas fa-database"></i> Saved Analyses', unsafe_allow_html=True)
 
+        # Custom CSS for fixed-width buttons that wrap together
+        st.markdown("""
+        <style>
+        .analysis-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.5rem;
+        }
+        .analysis-text {
+            flex: 1 1 auto;
+            min-width: 150px;
+        }
+        .analysis-buttons {
+            display: flex;
+            gap: 0.25rem;
+            flex-shrink: 0;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
         if st.session_state.storage.is_configured():
             saved_analyses = st.session_state.storage.list_analyses()
 
             if saved_analyses:
                 st.caption(f"{len(saved_analyses)} saved analyses")
 
-                for analysis in saved_analyses[:10]:  # Show last 10
-                    col1, col2, col3 = st.columns([8, 1, 1])
+                # Search box for filtering analyses
+                search_query = st.text_input("🔍 Search analyses", placeholder="Filter by company name...", label_visibility="collapsed", key="search_analyses")
 
-                    with col1:
-                        # Display analysis name as plain text
-                        st.write(analysis["display_name"])
+                # Filter analyses if search query provided
+                if search_query:
+                    filtered_analyses = [a for a in saved_analyses if search_query.lower() in a['company_name'].lower()]
+                else:
+                    filtered_analyses = saved_analyses[:10]  # Show last 10
 
-                    with col2:
-                        # Load/open icon button
-                        if st.button("📂", key=f"load_{analysis['id']}", help="Load analysis"):
-                            loaded_data = st.session_state.storage.load_analysis(analysis['id'])
-                            if loaded_data:
-                                st.session_state.analysis_result = loaded_data
-                                st.success(f"Loaded: {analysis['company_name']}")
-                                st.rerun()
+                for analysis in filtered_analyses:
+                    # Use container with fixed-width buttons
+                    container = st.container()
 
-                    with col3:
-                        # Trash icon delete button
-                        if st.button("🗑️", key=f"del_{analysis['id']}", help="Delete analysis"):
-                            if st.session_state.storage.delete_analysis(analysis['id']):
-                                st.success("Deleted!")
-                                st.rerun()
+                    with container:
+                        # Text in one column, buttons in another with min-width
+                        col1, col2 = st.columns([7, 3])
+
+                        with col1:
+                            st.write(analysis["display_name"])
+
+                        with col2:
+                            # Buttons side by side with fixed width
+                            btn_col1, btn_col2 = st.columns(2)
+
+                            with btn_col1:
+                                if st.button("📂", key=f"load_{analysis['id']}", help="Load analysis"):
+                                    loaded_data = st.session_state.storage.load_analysis(analysis['id'])
+                                    if loaded_data:
+                                        st.session_state.analysis_result = loaded_data
+                                        st.success(f"Loaded: {analysis['company_name']}")
+                                        st.rerun()
+
+                            with btn_col2:
+                                if st.button("🗑️", key=f"del_{analysis['id']}", help="Delete analysis"):
+                                    if st.session_state.storage.delete_analysis(analysis['id']):
+                                        st.success("Deleted!")
+                                        st.rerun()
             else:
                 st.caption("No saved analyses yet")
         else:
@@ -1055,57 +1182,14 @@ def main():
         - Save to Supabase (optional)
         """)
 
-        st.markdown("---")
-
-        # Configuration Section (at bottom, collapsible)
-        with st.expander("Configuration", expanded=False):
-            # Check if API keys are already in environment
-            env_openai_key = os.environ.get('OPENAI_API_KEY')
-            env_tavily_key = os.environ.get('TAVILY_API_KEY')
-
-            # OpenAI API Key
-            if env_openai_key:
-                st.success("OpenAI API Key loaded from .env file")
-                api_key = env_openai_key
-            else:
-                api_key = st.text_input(
-                    "OpenAI API Key",
-                    type="password",
-                    help="Enter your OpenAI API key. Get one at https://platform.openai.com/api-keys"
-                )
-                if api_key:
-                    os.environ['OPENAI_API_KEY'] = api_key
-
-            # Tavily API Key
-            if env_tavily_key:
-                st.success("Tavily API Key loaded from .env file")
-                tavily_key = env_tavily_key
-            else:
-                tavily_key = st.text_input(
-                    "Tavily API Key (Optional)",
-                    type="password",
-                    help="Enter your Tavily API key for web search. Get one at https://tavily.com"
-                )
-                if tavily_key:
-                    os.environ['TAVILY_API_KEY'] = tavily_key
-
-            # Handle case where tavily_key might not be set
-            if 'tavily_key' not in locals():
-                tavily_key = None
-
-            if tavily_key:
-                st.info("Web search enabled via Tavily")
-            else:
-                st.warning("No Tavily key - using GPT knowledge only")
+    # Load API keys from environment variables
+    api_key = os.environ.get('OPENAI_API_KEY')
+    tavily_key = os.environ.get('TAVILY_API_KEY')
 
     # Main content
     if not api_key:
-        st.markdown('<div class="warning-box"><i class="fas fa-exclamation-triangle"></i> Please enter your OpenAI API key in the sidebar to get started.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="warning-box"><i class="fas fa-exclamation-triangle"></i> OpenAI API key not found. Please add OPENAI_API_KEY to your .env file or environment variables.</div>', unsafe_allow_html=True)
         return
-
-    # Ensure tavily_key is defined (may be None)
-    if 'tavily_key' not in locals():
-        tavily_key = None
 
     # Company input
     col1, col2 = st.columns([3, 1])
@@ -1134,6 +1218,7 @@ def main():
             {'key': 'business_units', 'title': 'Business Units', 'icon': 'fas fa-industry'},
             {'key': 'priorities', 'title': 'Strategic Priorities', 'icon': 'fas fa-bullseye'},
             {'key': 'landscape', 'title': 'Agreement Landscape', 'icon': 'fas fa-chart-bar'},
+            {'key': 'deep_research', 'title': 'Deep Research', 'icon': 'fas fa-search'},
             {'key': 'opportunities', 'title': 'Opportunities', 'icon': 'fas fa-lightbulb'},
             {'key': 'matrix', 'title': 'Agreement Matrix', 'icon': 'fas fa-table'}
         ]
@@ -1250,6 +1335,7 @@ def main():
             # BACKGROUND & DETAILS TAB - Detailed information
             display_company_profile(analysis.get('company_profile', {}))
             display_business_units(analysis.get('business_units', []))
+            display_deep_research_findings(analysis.get('deep_research_findings', {}))
             display_agreement_landscape_by_function(analysis.get('agreement_landscape_by_function', {}))
             display_opportunities(analysis.get('optimization_opportunities', []))
             display_agreement_matrix(analysis.get('agreement_matrix', {}))
